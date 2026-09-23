@@ -121,7 +121,7 @@ firestore/node_modules/.bin/firebase deploy --only hosting --project signrush-lo
 GOOGLE_CLOUD_QUOTA_PROJECT=signrush-login .venv/bin/python -u tools/consensus_worker.py --seconds 1800
 ```
 
-Run one worker in the foreground while testing; keep that terminal open. It stops after 30 minutes. A Cloud Shell VM may terminate sooner. Restart only when needed and check its output; “ready” is not proof that every operation succeeded. On a newly restored Cloud Shell VM, FFmpeg may need reinstalling even though the home directory and virtual environment survive. Use the official OS package manager for FFmpeg.
+Run one worker in the foreground while testing; keep that terminal open. Sessions default to 30 minutes; the shared runtime now accepts up to 8 hours with `--seconds 28800`. A Cloud Shell VM may terminate sooner. See `RELIABILITY_READINESS.md` for locking, retries and limitations. Restart only when needed and check its output; “ready” is not proof that every operation succeeded. On a newly restored Cloud Shell VM, FFmpeg may need reinstalling even though the home directory and virtual environment survive. Use the official OS package manager for FFmpeg.
 
 The website/login remain available without the worker, but task assignment, media processing, reviews and queue updates stall. Do not tell players it is an always-on public game yet. No GitHub auto-deployment is configured: a git push backs up code; explicit Firebase deployment and worker update are still required.
 
@@ -182,3 +182,7 @@ The Rust core now includes the exact-match consensus decision stage, legacy/chec
 ### Comparison-only integration (2026-09-23)
 
 See `docs/RUST_MIGRATION_RUNBOOK.md`. The Python worker now has an off-by-default, post-transaction Rust comparison hook, with bounded input/time and content-free status logging. Existing Python Unicode normalization supplies the comparison protocol; a standalone Rust normalizer remains a separate cutover gate. `SIGNRUSH_RUST_SHADOW_BIN` is not set on the live worker. No live deployment, schema changes or new accounts/storage occurred.
+
+### Reliability and readiness follow-up
+
+See [the reliability/readiness report](RELIABILITY_READINESS.md) for the existing-host session runner, interrupted upload recovery, queue freshness fix, read-only ledger audit and mobile QA harness. No always-on hosting or cash-payment activation is implied.

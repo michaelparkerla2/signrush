@@ -102,7 +102,11 @@ class ConsensusWorker(ReviewWorker):
             value['signInProgress']=sign in ('requested','assigned','upload_requested','granting','uploading','submitted')
             value['reviewInProgress']=review in ('requested','preparing','assigned','refresh_requested','submitted')
             ref=self.db.document('playerDashboard/'+uid)
-            if ref.get().to_dict()!=value:ref.set(value)
+            previous=ref.get().to_dict() or {}
+            from datetime import datetime,timezone
+            updated=previous.pop('updatedAt',None)
+            if previous!=value or updated is None or (datetime.now(timezone.utc)-updated).total_seconds()>=30:
+                ref.set({**value,'updatedAt':self.fs.SERVER_TIMESTAMP})
 
     def tick(self):
         super().tick()
@@ -114,12 +118,5 @@ class ConsensusWorker(ReviewWorker):
             self.publish_dashboards();self._dashboard_at=time.monotonic()
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--seconds',type=int,default=1800);a=p.parse_args()
-    if not 1<=a.seconds<=1800:raise SystemExit('Maximum run is 1800 seconds')
-    worker=ConsensusWorker();end=time.monotonic()+a.seconds
-    print('Private signing, review and test-consensus worker ready.',flush=True)
-    while time.monotonic()<end:
-        try:worker.tick()
-        except Exception as exc:print('Worker needs retry:',type(exc).__name__,flush=True)
-        time.sleep(5)
-    print('Pilot worker stopped.',flush=True)
+    from worker_runtime import main
+    main(ConsensusWorker)

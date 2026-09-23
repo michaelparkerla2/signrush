@@ -60,7 +60,7 @@ Unset `SIGNRUSH_RUST_SHADOW_BIN` and restart the same worker using its normal bo
 - Prove atomic assignment reservation and reward-event deduplication under contention in the actual Rust database adapter. The pure Rust reward planner is not a transaction engine.
 - Preserve private references, silent playback, URL expiry, consent/export exclusions, and separation of test rewards from real-money accounting.
 - Test assignment and playback end-to-end, compare a bounded canary, then switch authority only with a verified rollback path. A Cloudflare HTTP wrapper alone would not satisfy these gates.
-- Heavy FFmpeg processing remains separate; this work does not remove the current 30-minute worker lifetime or make processing always-on.
+- Heavy FFmpeg processing remains separate; the later shared Python runtime permits bounded sessions up to 8 hours, but does not make processing always-on. See RELIABILITY_READINESS.md.
 
 ## Verified preparation checks (2026-09-23)
 

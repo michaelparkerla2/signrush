@@ -189,12 +189,5 @@ class ReviewWorker(Worker):
         self.export_answers()
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--seconds',type=int,default=1800);args=p.parse_args()
-    if not 1<=args.seconds<=1800:raise SystemExit('Maximum run is 1800 seconds')
-    worker=ReviewWorker();end=time.monotonic()+args.seconds
-    print('Private signing + blind-review worker ready.',flush=True)
-    while time.monotonic()<end:
-        try:worker.tick()
-        except Exception as exc:print('Worker service unavailable:',type(exc).__name__,flush=True)
-        time.sleep(5)
-    print('Pilot worker stopped.',flush=True)
+    from worker_runtime import main
+    main(ReviewWorker)

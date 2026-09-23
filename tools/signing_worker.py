@@ -2,7 +2,7 @@
 
 Use authorized Cloud Shell ADC. One assignment per player, three total. Browser
 rules permit requests only; every persisted decision is rechecked here. Not an
-always-on production worker: run explicitly for up to 30 minutes.
+always-on production worker: explicitly bounded sessions, default 30 minutes.
 """
 import argparse
 import hashlib
@@ -108,13 +108,16 @@ class Worker:
         @self.fs.transactional
         def reserve(tx):
             j=ref.get(transaction=tx).to_dict()
-            if not j or j['state']!='upload_requested':return None
+            if not j or j['state'] not in ('upload_requested','granting'):return None
+            now=datetime.now(timezone.utc)
+            if j['state']=='granting' and j.get('grantStartedAt') and (now-j['grantStartedAt']).total_seconds()<90:return None
             ok=self.consent(tx,j['uid'])
             record=self.db.document('pilotRecordings/'+j['assignmentId'])
             r=record.get(transaction=tx).to_dict() or {}
-            if not ok or not valid_upload(j) or r.get('uid')!=j['uid'] or r.get('status')!='assigned':
+            if not ok or not valid_upload(j) or r.get('uid')!=j['uid'] or r.get('status')!=('reserved' if j['state']=='granting' else 'assigned'):
                 tx.update(ref,{'state':'blocked'});return None
-            tx.update(ref,{'state':'granting'})
+            j['grantToken']=secrets.token_hex(16)
+            tx.update(ref,{'state':'granting','grantStartedAt':now,'grantToken':j['grantToken']})
             tx.update(record,{'status':'reserved','size':j['size'],'mime':j['mime'],'expectedSha256':j['sha256']})
             return j
         job=reserve(self.db.transaction())
@@ -126,8 +129,19 @@ class Worker:
         uri=blob.create_resumable_upload_session(content_type=job['mime'],size=job['size'],
                     origin=ORIGIN,if_generation_match=0,timeout=30)
         now=datetime.now(timezone.utc)
-        self.db.document('pilotRecordings/'+job['assignmentId']).update({'objectKey':key,'uploadIssuedAt':now})
-        ref.update({'state':'uploading','uploadURL':uri,'uploadIssuedAt':now})
+        @self.fs.transactional
+        def publish(tx):
+            current=ref.get(transaction=tx).to_dict() or {}
+            record_ref=self.db.document('pilotRecordings/'+job['assignmentId'])
+            record=record_ref.get(transaction=tx).to_dict() or {}
+            okay=self.consent(tx,job['uid'])
+            if current.get('state')!='granting' or current.get('grantToken')!=job['grantToken']:return
+            if not okay or record.get('status')!='reserved' or record.get('uid')!=job['uid']:
+                tx.update(ref,{'state':'blocked','uploadURL':self.fs.DELETE_FIELD});return
+            tx.update(record_ref,{'objectKey':key,'uploadIssuedAt':now})
+            tx.update(ref,{'state':'uploading','uploadURL':uri,'uploadIssuedAt':now,
+                           'grantToken':self.fs.DELETE_FIELD,'grantStartedAt':self.fs.DELETE_FIELD})
+        publish(self.db.transaction())
 
     def finish(self,ref,job):
         from google.api_core.exceptions import NotFound
@@ -195,22 +209,17 @@ class Worker:
     def tick(self):
         from google.cloud.firestore_v1.base_query import FieldFilter
         jobs=self.db.collection('signingJobs').where(filter=FieldFilter('state','in',
-            ['requested','upload_requested','uploading','submitted'])).limit(3).stream()
+            ['requested','upload_requested','granting','uploading','submitted'])).limit(3).stream()
         for snap in jobs:
             job=snap.to_dict()
             try:
                 if job['state']=='requested':self.assign(snap.reference)
-                elif job['state']=='upload_requested':self.grant(snap.reference)
+                elif job['state'] in ('upload_requested','granting'):self.grant(snap.reference)
                 else:self.finish(snap.reference,job)
             except Exception as exc:
                 # Never serialize SDK exceptions: a storage exception may contain a session URI.
                 print('Task check needs retry:',type(exc).__name__,flush=True)
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--seconds',type=int,default=1800);args=parser.parse_args()
-    if not 1<=args.seconds<=1800:raise SystemExit('Maximum worker run is 1800 seconds')
-    worker=Worker();print('Private signing worker ready; three slots, 8 MiB each.',flush=True)
-    end=time.monotonic()+args.seconds
-    while time.monotonic()<end:
-        worker.tick();time.sleep(5)
-    print('Pilot worker stopped. Restart explicitly to process more pending requests.',flush=True)
+    from worker_runtime import main
+    main(Worker)

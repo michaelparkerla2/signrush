@@ -52,4 +52,25 @@ class Transactions(unittest.TestCase):
   record=self.db.document('pilotRecordings/'+job['assignmentId']).get().to_dict()
   self.assertEqual(record['sourceSha256'],hashlib.sha256(b'synthetic').hexdigest());self.assertFalse(record['exportEligible']);self.assertIsNone(record['translation'])
   self.assertEqual(len(self.w.heldout.blobs),1)
+ def test_interrupted_grant_recovers_after_lease_without_new_reservation(self):
+  from datetime import datetime,timedelta,timezone
+  ref=self.player('p');self.w.assign(ref)
+  ref.update({'state':'upload_requested','size':9,'mime':'video/webm','sha256':'a'*64})
+  with patch.object(Blob,'create_resumable_upload_session',side_effect=TimeoutError):
+   with self.assertRaises(TimeoutError):self.w.grant(ref)
+  self.assertEqual(ref.get().to_dict()['state'],'granting')
+  self.w.grant(ref)
+  self.assertEqual(ref.get().to_dict()['state'],'granting')
+  ref.update({'grantStartedAt':datetime.now(timezone.utc)-timedelta(seconds=91)})
+  self.w.grant(ref)
+  self.assertEqual(ref.get().to_dict()['state'],'uploading')
+  self.assertEqual(self.db.document('pilotLimits/signing-v1').get().to_dict()['reserved'],1)
+ def test_consent_withdrawn_during_session_creation_blocks_publication(self):
+  ref=self.player('p');self.w.assign(ref)
+  ref.update({'state':'upload_requested','size':9,'mime':'video/webm','sha256':'a'*64})
+  def withdraw(**kw):
+   self.db.document('players/p').update({'consentAccepted':False})
+   return 'private-capability'
+  with patch.object(Blob,'create_resumable_upload_session',side_effect=withdraw):self.w.grant(ref)
+  job=ref.get().to_dict();self.assertEqual(job['state'],'blocked');self.assertNotIn('uploadURL',job)
 if __name__=='__main__':unittest.main()

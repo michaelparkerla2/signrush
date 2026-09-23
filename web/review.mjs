@@ -1,3 +1,7 @@
+export function freshEmptyQueue(d,now=Date.now()){
+ const at=d?.updatedAt?.toMillis?.();
+ return Number.isFinite(at)&&now>=at&&now-at<=30000&&d.reviewAvailable===0&&!d.reviewInProgress;
+}
 export function validPlaybackURL(value){
  try{const u=new URL(value);return u.protocol==='https:' && u.hostname==='storage.googleapis.com' && /^\/umi-signrush-raw\/pilot\/playback\/[a-f0-9]{32}\/silent-v1\.mp4$/.test(u.pathname) && u.searchParams.get('X-Goog-Algorithm')==='GOOG4-RSA-SHA256' && u.searchParams.has('X-Goog-Signature') && u.searchParams.get('X-Goog-Expires')==='300';}catch{return false;}
 }
@@ -50,7 +54,7 @@ export class Review {
 }
 export function reviewService(user,db,sdk){
  const ref=sdk.doc(db,'reviewJobs',user.uid);
- return {availability:async()=>{const snap=await sdk.getDocFromServer(sdk.doc(db,'playerDashboard',user.uid));const d=snap.exists()?snap.data():null;return d&&d.reviewAvailable===0&&!d.reviewInProgress?false:null;},watch:(next,error)=>sdk.onSnapshot(ref,s=>next(s.exists()?s.data():null),error),
+ return {availability:async()=>{const snap=await sdk.getDocFromServer(sdk.doc(db,'playerDashboard',user.uid));const d=snap.exists()?snap.data():null;return freshEmptyQueue(d)?false:null;},watch:(next,error)=>sdk.onSnapshot(ref,s=>next(s.exists()?s.data():null),error),
   request:()=>sdk.setDoc(ref,{uid:user.uid,state:'requested',requestedAt:sdk.serverTimestamp()}),
   refresh:()=>sdk.updateDoc(ref,{state:'refresh_requested'}),
   submit:(text,quality)=>sdk.updateDoc(ref,{state:'submitted',text,quality,submittedAt:sdk.serverTimestamp()})};

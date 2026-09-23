@@ -30,3 +30,13 @@ test('known empty queue answers immediately without creating an assignment reque
 test('unknown availability still requests server assignment; signout cancels late preflight',async()=>{const {review,calls}=fixture();review.service.availability=async()=>null;await review.request();assert.deepEqual(calls,['request']);let resolve;review.service.availability=()=>new Promise(r=>resolve=r);const pending=review.request();review.reset();resolve(false);await pending;assert.equal(review.job,null);assert.deepEqual(calls,['request']);});
 test('loading indicator follows assignment state and stops on empty or reset',()=>{const {review,next,els}=fixture();next({state:'requested'});assert.equal(els.get('#review-loading').hidden,false);assert.match(els.get('#review-status').textContent,/without refreshing/);next({state:'empty'});assert.equal(els.get('#review-loading').hidden,true);next({state:'preparing'});review.reset();assert.equal(els.get('#review-loading').hidden,true);});
 test('slow assignment stops spinner after 30 seconds and recovers on server response',t=>{t.mock.timers.enable({apis:['setTimeout']});const {review,next,els}=fixture();next({state:'requested'});t.mock.timers.tick(30000);assert.equal(els.get('#review-loading').hidden,true);assert.match(els.get('#review-status').textContent,/longer than expected/);next({state:'empty'});assert.match(els.get('#review-status').textContent,/No eligible videos/);review.reset();});
+
+test('stale, missing or future queue timestamps never block a fresh server request',async()=>{
+ const {freshEmptyQueue}=await import('../web/review.mjs');
+ const d={reviewAvailable:0,reviewInProgress:false};
+ assert.equal(freshEmptyQueue(d,100000),false);
+ assert.equal(freshEmptyQueue({...d,updatedAt:{toMillis:()=>1000}},100000),false);
+ assert.equal(freshEmptyQueue({...d,updatedAt:{toMillis:()=>100001}},100000),false);
+ assert.equal(freshEmptyQueue({...d,updatedAt:{toMillis:()=>90000}},100000),true);
+ assert.equal(freshEmptyQueue({...d,reviewInProgress:true,updatedAt:{toMillis:()=>90000}},100000),false);
+});
