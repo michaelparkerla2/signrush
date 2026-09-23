@@ -164,3 +164,16 @@ test('verified non-Google tokens cannot enroll',async()=>{
  const d=env.authenticatedContext('new-player',{email_verified:true,firebase:{sign_in_provider:'password'}}).firestore();
  await assertFails(setDoc(doc(d,'players/new-player'),{...profile(),uid:'new-player'}));
 });
+
+test('payout preferences are owner-only, validated and never an award or verified account',async()=>{
+ const d=db();await create(d);const ref=doc(d,'payoutPreferences/alice');
+ const value={method:'paypal',destination:'synthetic@example.com',usResident:false,version:1,updatedAt:serverTimestamp()};
+ await assertFails(setDoc(ref,value));await consent(d,'join');await assertSucceeds(setDoc(ref,value));
+ await assertSucceeds(getDoc(ref));await assertFails(getDoc(doc(db('bob'),'payoutPreferences/alice')));
+ await assertFails(getDocs(collection(d,'payoutPreferences')));await assertFails(deleteDoc(doc(db('bob'),'payoutPreferences/alice')));
+ for(const extra of [{destination:'invalid'},{verified:true},{status:'verified'},{balance:5000},{method:'zelle'},{updatedAt:Timestamp.fromMillis(1)},{usResident:true}])await assertFails(setDoc(ref,{...value,...extra}));
+ await assertSucceeds(setDoc(ref,{...value,method:'venmo',destination:'synthetic-user',usResident:true}));
+ await assertFails(setDoc(ref,{...value,method:'venmo',destination:'synthetic-user',usResident:false}));
+ await assertFails(setDoc(ref,{...value,method:'venmo',destination:'https://venmo.com/user',usResident:true}));
+ await consent(d,'withdraw','withdrawn');await assertFails(setDoc(ref,value));await assertSucceeds(getDoc(ref));await assertSucceeds(deleteDoc(ref));
+});

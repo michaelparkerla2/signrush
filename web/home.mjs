@@ -1,15 +1,16 @@
+import {Payout,payoutService} from './payout.mjs';
 export function progress(points){
  const safe=Number.isSafeInteger(points)&&points>=0?points:0;
  return {points:safe,target:(Math.floor(safe/25)+1)*25,remaining:25-safe%25,value:safe%25};
 }
 export class Home {
- constructor(root){this.root=root;this.el=id=>root.querySelector('#'+id);this.epoch=0;
+ constructor(root){this.root=root;this.el=id=>root.querySelector('#'+id);this.epoch=0;this.payout=new Payout(root);
   this.el('cash-out').onclick=()=>this.el('cash-wallet').showModal();
   this.el('close-wallet').onclick=()=>this.el('cash-wallet').close();
   this.el('share-signrush').onclick=()=>this.share();
   this.el('copy-signrush').onclick=()=>this.copyLink();
   this.reset();}
- reset(){this.epoch++;this.stops?.forEach(stop=>stop());this.stops=[];this.active=false;this.previous=null;this.el('cash-wallet').close();this.el('wallet-test-points').textContent='—';this.el('share-status').textContent='';this.el('home-points').textContent='—';this.el('star-progress').value=0;this.el('milestone-label').textContent='Checking your progress…';this.el('earned-stars').textContent='Your stars are waiting';this.root.hidden=true;}
+ reset(){this.payout.reset();this.epoch++;this.stops?.forEach(stop=>stop());this.stops=[];this.active=false;this.previous=null;this.el('cash-wallet').close();this.el('wallet-test-points').textContent='—';this.el('share-status').textContent='';this.el('home-points').textContent='—';this.el('star-progress').value=0;this.el('milestone-label').textContent='Checking your progress…';this.el('earned-stars').textContent='Your stars are waiting';this.root.hidden=true;}
  async copyLink(){
   const epoch=this.epoch;
   try{await navigator.clipboard.writeText('https://signrush-login.web.app/');if(epoch===this.epoch)this.el('share-status').textContent='Link copied. Share it wherever you like.';}
@@ -23,6 +24,7 @@ export class Home {
  }
  connect(service){
   this.reset();this.active=true;const epoch=this.epoch;
+  if(service.payout)this.payout.connect(service.payout);
   this.el('home-message').textContent='A little signing. A little progress. Your next challenge awaits.';
   for(const id of ['home-sign-count','home-review-count','home-pending','home-approved','home-submitted'])this.el(id).textContent='…';
   this.el('home-sign').disabled=true;this.el('home-review').disabled=true;
@@ -46,6 +48,7 @@ export class Home {
  }
 }
 export function homeService(user,db,sdk){return {
+ payout:payoutService(user,db,sdk),
  tasks:(next,error)=>sdk.onSnapshot(sdk.doc(db,'playerDashboard',user.uid),s=>next(s.exists()?s.data():null),error),
  points:(next,error)=>sdk.onSnapshot(sdk.doc(db,'playerRewards',user.uid),s=>next(s.exists()?s.data().points:0),error)
 };}

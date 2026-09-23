@@ -59,6 +59,7 @@ Current limits: three global recording reservations (including abandoned ones), 
 | `pilotRecordings/{assignmentId}` | Prompt snapshot, signer UID, media provenance, technical checks, reviewer IDs and consensus |
 | `pilotReviews/{reviewId}` | Independent answer, quality response, assignment/recording linkage |
 | `rewardEvents/{id}` | Immutable, idempotent test awards |
+| `payoutPreferences/{uid}` | Private, unverified PayPal/Venmo destination; see [payout setup](payout-preferences.md); never a payment authorization or corpus field |
 | `playerRewards/{uid}` | Server-controlled, owner-readable balance |
 | `playerDashboard/{uid}` | Sanitized counts; server controlled, owner-readable |
 

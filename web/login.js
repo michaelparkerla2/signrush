@@ -98,7 +98,7 @@ try {
  ]);
  const app = initializeApp(firebaseConfig);
  const auth = sdk.getAuth(app);
- // Standard Firestore in the no-billing Spark project; invitation-only rules.
+ // Standard Firestore in the no-billing Spark project; verified Google accounts and private owner-only rules.
  const useFirestoreRegistration = true;
  if(useFirestoreRegistration) registration.fetcher=firestoreRegistration(auth,firestoreSDK.getFirestore(app),firestoreSDK,pilotDisclosure);
  // Keep credentials only in memory. Never print, store, or put tokens in URLs.

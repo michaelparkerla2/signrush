@@ -69,6 +69,24 @@ service cloud.firestore {
      && request.resource.data.text.size() <= 1000 && request.resource.data.submittedAt == request.time)
    );
   }
+  match /payoutPreferences/{uid} {
+   allow get, delete: if enrolledAccount(uid);
+   allow list: if false;
+   allow create, update: if participating(uid)
+    && request.resource.data.keys().hasAll(['method','destination','usResident','version','updatedAt'])
+    && request.resource.data.keys().hasOnly(['method','destination','usResident','version','updatedAt'])
+    && request.resource.data.version == 1
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.destination is string
+    && request.resource.data.usResident is bool
+    && ((request.resource.data.method == 'paypal'
+      && request.resource.data.usResident == false
+      && request.resource.data.destination.size() <= 254
+      && request.resource.data.destination.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'))
+     || (request.resource.data.method == 'venmo'
+      && request.resource.data.usResident == true
+      && request.resource.data.destination.matches('^[A-Za-z0-9_-]{5,30}$')));
+  }
   match /playerDashboard/{uid} {
    allow get: if participating(uid);
    allow list, write: if false;
