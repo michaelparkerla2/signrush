@@ -10,3 +10,7 @@ The owner supplied these six PNGs on September 23, 2026. They are copied byte-fo
 - `first-spark-badge.png`: green hand medal, from clipboard de6c73b8; first earned trophy (25 points).
 
 Existing selectable avatars remain available and keep their stable IDs. Art changes do not create new rewards, alter scoring, or change leaderboard privacy. Off-screen game artwork loads lazily. Source files are preserved in Git for future optimized derivatives if requested.
+
+## New trophy collection
+
+Six additional owner-supplied PNGs are stored unchanged in `web/assets/trophies`: spark, silver-rush, gold-standard and rush-legend replace the four milestone illustrations without changing their thresholds. Sign-champion and decode-champion illustrate task choices, not additional earned awards. The landing hero displays a $5,000 **planned, unfunded launch-pool target**, with unconfirmed rules and timing stated beside it. It does not claim existing cash payouts, a funded/growing prize pool, or a live cash contest.
