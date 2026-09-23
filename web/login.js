@@ -132,7 +132,7 @@ try {
   signingContext=user?()=>signingService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
   reviewContext=user?()=>reviewService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
   login.hidden=Boolean(user);account.hidden=!user;
-  status.textContent=user?'Signed in securely.':'Use your Google account to try the login.';
+  status.textContent=user?'Signed in securely.':'Join with Google. Pick your first challenge.';
   if(user){
    document.querySelector('#identity').textContent=user.email || 'Signed-in player';
    document.querySelector('#uid').textContent=user.uid;
