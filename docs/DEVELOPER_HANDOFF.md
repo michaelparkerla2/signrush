@@ -174,3 +174,7 @@ Logs may identify failures by exception type without the full cause. Diagnose wi
 ## Account-free Rust preparation (2026-09-23)
 
 The owner requests no new accounts or storage locations. Continue preparation locally using existing resources; obtain required deployment accounts/access from Sam later. `backend/rust-core` now contains a dependency-free Rust review-eligibility library with offline unit tests. It is not integrated or deployed. See its README for transaction/identity adapter requirements and deliberate fail-closed differences from Python. Current Python/Firebase/GCS behavior stays in place. Cloudflare access, authenticated adapters, parity/concurrency validation and deployment remain outstanding; do not describe the migration as complete.
+
+### Rust consensus and reward preparation
+
+The Rust core now includes the exact-match consensus decision stage, legacy/checked identity resolution, and a pure test-reward planner. Python-generated synthetic fixtures cover 135 cases; see `tools/generate_rust_consensus_fixtures.py`. Full Rust normalization, authenticated Firebase/Firestore adapters, transactional reservations/ledger writes and Cloudflare deployment are still outstanding. No cash activation or production cutover occurred. Identity cycles are a known legacy ambiguity: new reward planning rejects them; adapters must use the checked resolver. Existing Python/live behavior was not changed.

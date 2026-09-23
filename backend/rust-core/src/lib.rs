@@ -219,3 +219,6 @@ mod tests {
         }
     }
 }
+
+pub mod consensus;
+pub mod rewards;
