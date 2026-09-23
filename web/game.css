@@ -19,3 +19,6 @@ button.landing-cta{width:auto;min-height:48px;text-align:left}.entry-status{font
 .rate-conditions a,.hero-rewards a{color:#e0d2ff;text-decoration:underline;text-underline-offset:3px}.rules-main{display:block;max-width:820px}.rules-main .card{margin-bottom:18px}.rules-main p,.rules-main li{color:#c7d0e3;line-height:1.7;font-size:14px}.rules-main h1{font-size:42px}.rules-main h2{font-size:24px}.rules-main a{color:var(--lime)}.rules-main section{scroll-margin-top:20px}
 
 .rate-asterisk{font-size:12px;line-height:0;vertical-align:super;margin-left:2px;letter-spacing:0}
+
+/* Shared front-page trophy for the player bonus card. */
+.pool-trophy{position:absolute;right:20px;top:22px;width:140px;height:155px;object-fit:contain;pointer-events:none}.bonus-pool>#bonus-title,.bonus-pool>.pool-value,.bonus-pool>.pool-description{position:relative;padding-right:145px}.bonus-pool a{color:#ead8ff;text-decoration:underline;text-underline-offset:3px}@media(max-width:450px){.pool-trophy{right:10px;top:45px;width:96px;height:112px}.bonus-pool>#bonus-title,.bonus-pool>.pool-value,.bonus-pool>.pool-description{padding-right:90px}.bonus-pool>.pool-description{padding-right:0;margin-top:24px}}
