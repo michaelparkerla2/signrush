@@ -25,3 +25,7 @@ New shared midnight/lime/violet/gold theme covers the landing page, game home, r
 Unchecking leaderboard participation removes the entry atomically with the preference change. Consent withdrawal deletes both the public entry and the game profile in the consent transaction; rules reject withdrawal that leaves a leaderboard entry. Admin suspension should also delete an existing leaderboard entry. Raw user IDs are document keys but emails, consent records, videos, prompts and payout data are never included.
 
 Every 25 points produces the next level and star. Trophies unlock at 25, 100, 250 and 500 approved test points. A live points increase produces a dismissible celebration; initial page loading does not claim a new award. These are display achievements with no additional points or cash issued. No fabricated competitors or scores are seeded in production. Synthetic fixtures are local QA only.
+
+### Expanded trophy shelf (2026-09-23)
+
+Eight trophy thresholds: 25, 100, 250, 500, 1,000, 2,000, 3,500 and 5,000 points. Existing first-four unlocks are preserved. The shelf uses one horizontal row with touch scrolling, keyboard focus and left/right buttons; reduced-motion preferences are respected. Later awards reuse the supplied trophy art with distinct titles and card treatments. Count derives from the trophy catalog. Checked every unlock boundary and the 5,000-point completion, plus mobile scroll to the final milestone without page overflow. These are achievement thresholds, not a conversion of test points into cash.
