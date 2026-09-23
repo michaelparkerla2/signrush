@@ -38,6 +38,9 @@ document.getElementById('mode-sign').onclick=()=>showMode('sign');
 document.getElementById('mode-review').onclick=()=>showMode('review');
 const login = document.querySelector('#login');
 const status = document.querySelector('#status');
+const enterRush=document.querySelector('#enter-rush');
+function setLoginDisabled(value){login.disabled=value;enterRush.disabled=value;}
+function authStatus(message){status.textContent=message;document.querySelector('#entry-status').textContent=message;}
 const account = document.querySelector('#account');
 const byId = id=>document.getElementById(id);
 let currentUser=null,previousRegistration=null,payoutAutoOpen=false;
@@ -141,8 +144,8 @@ try {
   homeContext=user?()=>homeService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
   signingContext=user?()=>signingService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
   reviewContext=user?()=>reviewService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
-  login.hidden=Boolean(user);account.hidden=!user;
-  status.textContent=user?'Signed in securely.':'Join with Google. Pick your first challenge.';
+  login.hidden=Boolean(user);enterRush.hidden=Boolean(user);account.hidden=!user;
+  authStatus(user?'Signed in securely.':'Sign in or create your account with Google.');
   if(user){
    document.querySelector('#identity').textContent=user.email || 'Signed-in player';
    document.querySelector('#uid').textContent=user.uid;
@@ -152,18 +155,21 @@ try {
    registration.reset();
    for(const id of ['identity','uid','verified']) document.getElementById(id).textContent='';
   }
-  login.disabled=false;
+  setLoginDisabled(false);
  });
- login.addEventListener('click',async()=>{
-  login.disabled=true;status.textContent='Finish signing in in the Google window…';
+ const startSignIn=async()=>{
+  if(login.disabled)return;
+  setLoginDisabled(true);authStatus('Finish signing in in the Google window…');
   try{await sdk.signInWithPopup(auth,provider);}
-  catch(error){status.textContent=errors[error.code] || 'Sign-in could not finish. Please try again in your regular browser.';}
-  finally{login.disabled=false;}
- });
+  catch(error){authStatus(errors[error.code] || 'Sign-in could not finish. Please try again in your regular browser.');}
+  finally{setLoginDisabled(false);}
+ };
+ login.addEventListener('click',startSignIn);
+ enterRush.addEventListener('click',startSignIn);
  document.querySelector('#logout').addEventListener('click',async()=>{
   try{registration.reset();await sdk.signOut(auth);}catch{status.textContent='Sign-out could not finish. Close this tab to clear this temporary session.';}
  });
 }catch{
- status.textContent='Sign-in could not load. Check your connection and reload this page.';
- login.disabled=true;
+ authStatus('Sign-in could not load. Check your connection and reload this page.');
+ setLoginDisabled(true);
 }
