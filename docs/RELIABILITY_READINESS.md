@@ -50,3 +50,9 @@ Keep the previous worker files and frontend before replacement. Stop the updated
 - 10 isolated PostgreSQL corpus tests passed; the temporary database was stopped and removed.
 - 3 runtime tests, 2 aggregate-audit tests, 3 signing checks and 2 dashboard tests passed.
 - Synthetic responsive layout checked at 320, 390, 768 and 1024 pixels.
+
+## Deployment verification
+
+Firebase Hosting release completed; the hosted `review.mjs` SHA-256 matched the checked-in file. Updated worker files were installed in the existing Cloud Shell checkout after saving `~/signrush-before-reliability-20260923.tgz`. One live tick completed without a reported error, followed by an explicit 28,800-second worker session with Rust shadow unset. This records startup, not a guarantee the session will remain alive.
+
+Read-only bucket checks found uniform bucket access enabled, public-access prevention enforced and no `allUsers`/`allAuthenticatedUsers` bucket grants on raw, held-out and exports buckets. These checks do not enumerate inherited private administrator access. Local preview servers were stopped after QA.
