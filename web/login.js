@@ -1,0 +1,139 @@
+import {firebaseConfig} from './firebase-config.js';
+import {Onboarding} from './onboarding.mjs';
+import {firestoreRegistration} from './firestore-registration.mjs';
+import {pilotDisclosure} from './pilot-disclosure.mjs';
+import {Signing,signingService} from './signing.mjs';
+import {Review,reviewService} from './review.mjs';
+import {Home,homeService} from './home.mjs';
+const home=new Home(document.querySelector('#home'));
+let homeContext=null;
+const signing=new Signing(document.querySelector('#signing'));
+const reviewing=new Review(document.querySelector('#reviewing'));
+let signingContext=null,reviewContext=null,rewardContext=null,rewardUnsubscribe=null,taskMode='home';
+function showMode(mode){
+ if(mode!=='sign' && signing.job?.state==='assigned' && (signing.stream||signing.blob)){
+  if(!window.confirm('Leave this take? Your unsubmitted recording will be discarded.'))return;
+  signing.discardTake();
+ }
+ taskMode=mode;
+ home.root.hidden=mode!=='home';
+ document.getElementById('mode-home').setAttribute('aria-pressed',String(mode==='home'));
+ document.getElementById('test-rewards').hidden=mode==='home';
+ document.getElementById('mode-sign').setAttribute('aria-pressed',String(mode==='sign'));
+ document.getElementById('mode-review').setAttribute('aria-pressed',String(mode==='review'));
+ signing.root.hidden=mode!=='sign';reviewing.root.hidden=mode!=='review';
+ if(mode!=='review')reviewing.el('review-video').pause();
+}
+document.getElementById('mode-home').onclick=()=>showMode('home');
+document.getElementById('home-sign').onclick=()=>{showMode('sign');signing.requestPhrase();};
+document.getElementById('home-review').onclick=()=>{showMode('review');reviewing.request();};
+document.getElementById('mode-sign').onclick=()=>showMode('sign');
+document.getElementById('mode-review').onclick=()=>showMode('review');
+const login = document.querySelector('#login');
+const status = document.querySelector('#status');
+const account = document.querySelector('#account');
+const byId = id=>document.getElementById(id);
+let currentUser=null;
+const registration=new Onboarding(state=>{
+ const phase=state.phase;
+ const ready=phase==='ready';
+ document.body.classList.toggle('player-ready',ready);
+ byId('account-toggle').hidden=!ready;
+ byId('account-toggle').setAttribute('aria-expanded','false');
+ byId('account-panel').hidden=ready;
+ byId('agreement-details').open=!ready;
+ byId('task-modes').hidden=!ready;
+ byId('test-rewards').hidden=!ready;
+ if(ready&&rewardContext&&!rewardUnsubscribe)rewardUnsubscribe=rewardContext();
+ if(!ready){rewardUnsubscribe?.();rewardUnsubscribe=null;byId('test-points').textContent='Checking points…';}
+ if(phase==='ready' && signingContext && !signing.active) signing.connect(signingContext());
+ else if(phase!=='ready' && signing.active) signing.reset();
+ if(ready && reviewContext && !reviewing.active)reviewing.connect(reviewContext());
+ else if(!ready && reviewing.active)reviewing.reset();
+ if(ready&&homeContext&&!home.active)home.connect(homeContext());
+ if(!ready&&home.active)home.reset();
+ if(ready)showMode(taskMode);
+ byId('onboarding').hidden=phase==='signed-out';
+ byId('agreement').hidden=!state.disclosure;
+ byId('consent-form').hidden=phase!=='consent';
+ byId('retry-registration').hidden=phase!=='unavailable';
+ byId('withdraw').hidden=phase!=='ready';
+ byId('agree').checked=false;byId('save-consent').disabled=true;
+ byId('registration-status').textContent=state.message || ({
+  loading:'Checking your player profile…',
+  consent:state.withdrawn?'Your agreement was withdrawn. Participation is paused.':'Read the rules and training disclosure before joining the pilot.',
+  saving:state.accept?'Saving your agreement…':'Withdrawing your agreement…',
+  ready:''
+ }[phase] || '');
+ if(state.disclosure){
+  byId('rules').replaceChildren(...state.disclosure.rules.map(rule=>{const li=document.createElement('li');li.textContent=rule;return li;}));
+  byId('disclosure').textContent=state.disclosure.notice;
+  byId('agreement-versions').textContent=`Rules: ${state.disclosure.terms_version} · Training disclosure: ${state.disclosure.disclosure_version}`;
+ }else{
+  byId('rules').replaceChildren();byId('disclosure').textContent='';byId('agreement-versions').textContent='';
+ }
+});
+byId('account-toggle').addEventListener('click',()=>{
+ const panel=byId('account-panel');panel.hidden=!panel.hidden;
+ if(panel.hidden)byId('agreement-details').open=false;
+ byId('account-toggle').setAttribute('aria-expanded',String(!panel.hidden));
+});
+byId('agree').addEventListener('change',()=>{byId('save-consent').disabled=!byId('agree').checked;});
+byId('consent-form').addEventListener('submit',event=>{event.preventDefault();if(byId('agree').checked)registration.consent(true);});
+byId('retry-registration').addEventListener('click',()=>{if(currentUser)registration.start(currentUser);});
+byId('withdraw').addEventListener('click',()=>registration.consent(false));
+const errors = {
+ 'auth/popup-blocked':'Your browser blocked the sign-in window. Allow popups for this page and try again.',
+ 'auth/popup-closed-by-user':'Sign-in was closed. You can try again whenever you’re ready.',
+ 'auth/unauthorized-domain':'This preview address is not authorized for sign-in yet.',
+ 'auth/network-request-failed':'We couldn’t reach Google. Check your connection and try again.',
+ 'auth/cancelled-popup-request':'A sign-in window is already open. Please finish there.',
+ 'auth/operation-not-allowed':'Google sign-in is not available yet.'
+};
+try {
+ const [{initializeApp},sdk,firestoreSDK] = await Promise.all([
+  import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js'),
+  import('https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js'),
+  import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js')
+ ]);
+ const app = initializeApp(firebaseConfig);
+ const auth = sdk.getAuth(app);
+ // Standard Firestore in the no-billing Spark project; invitation-only rules.
+ const useFirestoreRegistration = true;
+ if(useFirestoreRegistration) registration.fetcher=firestoreRegistration(auth,firestoreSDK.getFirestore(app),firestoreSDK,pilotDisclosure);
+ // Keep credentials only in memory. Never print, store, or put tokens in URLs.
+ await sdk.setPersistence(auth,sdk.inMemoryPersistence);
+ const provider = new sdk.GoogleAuthProvider();
+ provider.setCustomParameters({prompt:'select_account'});
+ sdk.onAuthStateChanged(auth,user=>{
+  rewardUnsubscribe?.();rewardUnsubscribe=null;currentUser=user;
+  rewardContext=user?()=>firestoreSDK.onSnapshot(firestoreSDK.doc(firestoreSDK.getFirestore(app),'playerRewards',user.uid),s=>{if(currentUser?.uid===user.uid)byId('test-points').textContent=`${s.exists()?s.data().points:0} points`;},()=>{byId('test-points').textContent='Points unavailable';}):null;
+  homeContext=user?()=>homeService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
+  signingContext=user?()=>signingService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
+  reviewContext=user?()=>reviewService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
+  login.hidden=Boolean(user);account.hidden=!user;
+  status.textContent=user?'Signed in securely.':'Use your Google account to try the login.';
+  if(user){
+   document.querySelector('#identity').textContent=user.email || 'Signed-in player';
+   document.querySelector('#uid').textContent=user.uid;
+   document.querySelector('#verified').textContent=user.emailVerified?'Email verified by Google.':'Email verification is still required before pilot access.';
+   registration.start(user);
+  }else{
+   registration.reset();
+   for(const id of ['identity','uid','verified']) document.getElementById(id).textContent='';
+  }
+  login.disabled=false;
+ });
+ login.addEventListener('click',async()=>{
+  login.disabled=true;status.textContent='Finish signing in in the Google window…';
+  try{await sdk.signInWithPopup(auth,provider);}
+  catch(error){status.textContent=errors[error.code] || 'Sign-in could not finish. Please try again in your regular browser.';}
+  finally{login.disabled=false;}
+ });
+ document.querySelector('#logout').addEventListener('click',async()=>{
+  try{registration.reset();await sdk.signOut(auth);}catch{status.textContent='Sign-out could not finish. Close this tab to clear this temporary session.';}
+ });
+}catch{
+ status.textContent='Sign-in could not load. Check your connection and reload this page.';
+ login.disabled=true;
+}

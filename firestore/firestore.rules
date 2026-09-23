@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function enrolledAccount(uid) {
+   return request.auth != null && request.auth.uid == uid
+    && request.auth.token.email_verified == true
+    && request.auth.token.firebase.sign_in_provider == 'google.com'
+    && (!exists(/databases/$(database)/documents/pilotInvites/$(uid))
+     || get(/databases/$(database)/documents/pilotInvites/$(uid)).data.active == true);
+  }
+  function profileShape(d, uid) {
+   return d.keys().hasAll(['uid','createdAt','updatedAt','status','mode','lastConsentId','consentAccepted'])
+    && d.keys().hasOnly(['uid','createdAt','updatedAt','status','mode','lastConsentId','consentAccepted'])
+    && d.uid == uid && d.mode == 'test' && d.consentAccepted is bool;
+  }
+  function eventShape(d) {
+   return d.keys().hasAll(['action','termsVersion','disclosureVersion','recordedAt'])
+    && d.keys().hasOnly(['action','termsVersion','disclosureVersion','recordedAt'])
+    && d.action in ['accepted','withdrawn']
+    && d.termsVersion == 'pilot-v1' && d.disclosureVersion == 'training-v1'
+    && d.recordedAt == request.time;
+  }
+  function participating(uid) {
+   return enrolledAccount(uid)
+    && get(/databases/$(database)/documents/players/$(uid)).data.status == 'active'
+    && get(/databases/$(database)/documents/players/$(uid)).data.mode == 'test'
+    && get(/databases/$(database)/documents/players/$(uid)).data.consentAccepted == true
+    && get(/databases/$(database)/documents/players/$(uid)/consents/$(get(/databases/$(database)/documents/players/$(uid)).data.lastConsentId)).data.action == 'accepted'
+    && get(/databases/$(database)/documents/players/$(uid)/consents/$(get(/databases/$(database)/documents/players/$(uid)).data.lastConsentId)).data.termsVersion == 'pilot-v1'
+    && get(/databases/$(database)/documents/players/$(uid)/consents/$(get(/databases/$(database)/documents/players/$(uid)).data.lastConsentId)).data.disclosureVersion == 'training-v1';
+  }
+  match /signingJobs/{uid} {
+   allow get: if participating(uid);
+   allow list, delete: if false;
+   allow create: if participating(uid)
+    && request.resource.data.keys().hasOnly(['uid','state','requestedAt'])
+    && request.resource.data.uid == uid && request.resource.data.state == 'requested'
+    && request.resource.data.requestedAt == request.time;
+   allow update: if participating(uid) && (
+    (resource.data.state in ['saved','failed','blocked']
+     && request.resource.data.keys().hasOnly(['uid','state','requestedAt'])
+     && request.resource.data.uid == uid && request.resource.data.state == 'requested'
+     && request.resource.data.requestedAt == request.time)
+    || (resource.data.state == 'assigned' && request.resource.data.state == 'upload_requested'
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','size','mime','sha256'])
+     && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 8388608
+     && request.resource.data.mime in ['video/webm','video/mp4']
+     && request.resource.data.sha256.matches('^[a-f0-9]{64}$'))
+    || (resource.data.state == 'uploading' && request.resource.data.state == 'submitted'
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']))
+   );
+  }
+  match /reviewJobs/{uid} {
+   allow get: if participating(uid);
+   allow list, delete: if false;
+   function requestShape(d) {
+    return d.keys().hasOnly(['uid','state','requestedAt']) && d.uid == uid
+     && d.state == 'requested' && d.requestedAt == request.time;
+   }
+   allow create: if participating(uid) && requestShape(request.resource.data);
+   allow update: if participating(uid) && (
+    (resource.data.state in ['empty','pending','blocked'] && requestShape(request.resource.data))
+    || (resource.data.state == 'assigned' && request.resource.data.state == 'refresh_requested'
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']))
+    || (resource.data.state == 'assigned' && request.resource.data.state == 'submitted'
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','text','submittedAt','quality'])
+     && request.resource.data.quality in ['good','poor','not_sure']
+     && request.resource.data.text is string && request.resource.data.text.size() > 0
+     && request.resource.data.text.size() <= 1000 && request.resource.data.submittedAt == request.time)
+   );
+  }
+  match /playerDashboard/{uid} {
+   allow get: if participating(uid);
+   allow list, write: if false;
+  }
+  match /playerRewards/{uid} {
+   allow get: if enrolledAccount(uid);
+   allow list, write: if false;
+  }
+  match /players/{uid} {
+   allow get: if enrolledAccount(uid);
+   allow list, delete: if false;
+   allow create: if enrolledAccount(uid) && profileShape(request.resource.data, uid)
+    && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time
+    && request.resource.data.status == 'active'
+    && request.resource.data.lastConsentId == null && request.resource.data.consentAccepted == false;
+   allow update: if enrolledAccount(uid) && profileShape(request.resource.data, uid)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt','lastConsentId','consentAccepted'])
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.lastConsentId is string
+    && request.resource.data.lastConsentId.matches('^[A-Za-z0-9_-]{1,80}$')
+    && request.resource.data.lastConsentId != resource.data.lastConsentId
+    && !exists(/databases/$(database)/documents/players/$(uid)/consents/$(request.resource.data.lastConsentId))
+    && eventShape(getAfter(/databases/$(database)/documents/players/$(uid)/consents/$(request.resource.data.lastConsentId)).data)
+    && request.resource.data.consentAccepted ==
+      (getAfter(/databases/$(database)/documents/players/$(uid)/consents/$(request.resource.data.lastConsentId)).data.action == 'accepted')
+    && (resource.data.status == 'active' || request.resource.data.consentAccepted == false);
+   match /consents/{eventId} {
+    allow get: if enrolledAccount(uid);
+    allow list, update, delete: if false;
+    allow create: if enrolledAccount(uid) && eventId.matches('^[A-Za-z0-9_-]{1,80}$')
+     && eventShape(request.resource.data)
+     && exists(/databases/$(database)/documents/players/$(uid))
+     && getAfter(/databases/$(database)/documents/players/$(uid)).data.lastConsentId == eventId
+     && getAfter(/databases/$(database)/documents/players/$(uid)).data.updatedAt == request.time
+     && getAfter(/databases/$(database)/documents/players/$(uid)).data.consentAccepted == (request.resource.data.action == 'accepted');
+   }
+  }
+  // Invitations, prompts, answers, rewards, exports and every future collection
+  // stay inaccessible to browser clients until separately designed and tested.
+  match /{document=**} { allow read, write: if false; }
+ }
+}
