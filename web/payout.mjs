@@ -39,6 +39,7 @@ export class Payout {
   this.el('payout-retry').hidden=!this.error;this.el('payout-fields').disabled=this.busy;
   this.el('payout-save').textContent=this.busy?'Saving…':'Save payout details';
   this.el('payout-cancel').disabled=this.busy;
+  this.onChange?.();
  }
  async connect(service){this.reset();this.service=service;const epoch=this.epoch;
   try{const saved=await service.load();if(epoch!==this.epoch)return;this.saved=saved;}

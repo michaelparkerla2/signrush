@@ -9,3 +9,6 @@ The application loads from the server and acknowledges saves only when the Fires
 This is user setup only. UMI's issuing account is not needed to store preferences. No payout is requested or sent; cash balance remains $0, current pilot points remain nonredeemable, and saved details are labeled unverified. Manual or automated payments still require a separately authorized and reconciled payment workflow. Do not copy identifiers into Git, analytics, training manifests or general logs.
 
 Validation includes controller cases for malformed/mismatched entries, unsuccessful loads/saves, duplicate clicks, successful save/remove and late callbacks after sign-out; Firestore emulator cases cover owner isolation, current consent, forbidden privileged fields, format checks and removal after withdrawal. Mobile layout and synthetic saved state were reviewed at 390×844. No real payment or live participant payout detail was used in testing.
+
+## Discoverability update
+After accepting the signup agreement, players see optional payout setup with “Skip, add later when I have points.” Returning players can open Payout account in the header from any task, Add/Manage payout account near their home points, or the wallet. Setup has its own dialog and does not require points. Skipping never writes a payout preference.

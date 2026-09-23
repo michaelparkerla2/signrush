@@ -4,7 +4,7 @@ export function progress(points){
  return {points:safe,target:(Math.floor(safe/25)+1)*25,remaining:25-safe%25,value:safe%25};
 }
 export class Home {
- constructor(root){this.root=root;this.el=id=>root.querySelector('#'+id);this.epoch=0;this.payout=new Payout(root);
+ constructor(root,payoutRoot=root){this.root=root;this.el=id=>root.querySelector('#'+id);this.epoch=0;this.payout=new Payout(payoutRoot);
   this.el('cash-out').onclick=()=>this.el('cash-wallet').showModal();
   this.el('close-wallet').onclick=()=>this.el('cash-wallet').close();
   this.el('share-signrush').onclick=()=>this.share();

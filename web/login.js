@@ -5,7 +5,7 @@ import {pilotDisclosure} from './pilot-disclosure.mjs';
 import {Signing,signingService} from './signing.mjs';
 import {Review,reviewService} from './review.mjs';
 import {Home,homeService} from './home.mjs';
-const home=new Home(document.querySelector('#home'));
+const home=new Home(document.querySelector('#home'),document);
 let homeContext=null;
 const signing=new Signing(document.querySelector('#signing'));
 const reviewing=new Review(document.querySelector('#reviewing'));
@@ -33,10 +33,29 @@ const login = document.querySelector('#login');
 const status = document.querySelector('#status');
 const account = document.querySelector('#account');
 const byId = id=>document.getElementById(id);
-let currentUser=null;
+let currentUser=null,previousRegistration=null,payoutAutoOpen=false;
+function openPayout(welcome=false){
+ byId('cash-wallet').close();
+ byId('payout-welcome').hidden=!welcome;
+ byId('payout-done').textContent=welcome?'Skip, add later when I have points':'Done';
+ if(!byId('payout-dialog').open)byId('payout-dialog').showModal();
+ payoutAutoOpen=home.payout.loading;
+ home.payout.edit();
+}
+for(const id of ['payout-nav','home-payout','wallet-payout'])byId(id).onclick=()=>openPayout();
+for(const id of ['close-payout','payout-done'])byId(id).onclick=()=>byId('payout-dialog').close();
+home.payout.onChange=()=>{
+ byId('home-payout').querySelector('strong').textContent=home.payout.saved?'Manage payout account':'Add payout account';
+ if(home.payout.saved)byId('payout-done').textContent='Done · Let’s play';
+ if(payoutAutoOpen&&!home.payout.loading){payoutAutoOpen=false;if(byId('payout-dialog').open&&!home.payout.saved&&!home.payout.error)home.payout.edit();}
+};
 const registration=new Onboarding(state=>{
  const phase=state.phase;
  const ready=phase==='ready';
+ const justRegistered=ready&&previousRegistration?.phase==='saving'&&previousRegistration.accept;
+ previousRegistration=state;
+ byId('payout-nav').hidden=!ready;
+ if(!ready){payoutAutoOpen=false;byId('payout-dialog').close();}
  document.body.classList.toggle('player-ready',ready);
  byId('account-toggle').hidden=!ready;
  byId('account-toggle').setAttribute('aria-expanded','false');
@@ -53,6 +72,7 @@ const registration=new Onboarding(state=>{
  if(ready&&homeContext&&!home.active)home.connect(homeContext());
  if(!ready&&home.active)home.reset();
  if(ready)showMode(taskMode);
+ if(justRegistered)openPayout(true);
  byId('onboarding').hidden=phase==='signed-out';
  byId('agreement').hidden=!state.disclosure;
  byId('consent-form').hidden=phase!=='consent';
