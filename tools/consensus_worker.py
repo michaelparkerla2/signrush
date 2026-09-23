@@ -56,7 +56,13 @@ class ConsensusWorker(ReviewWorker):
                                  'policyVersion':decision['version'],'createdAt':self.fs.SERVER_TIMESTAMP})
                 wallet,value=wallets[uid]
                 tx.set(wallet,{'points':value['points']+points,'mode':'test','updatedAt':self.fs.SERVER_TIMESTAMP})
-        commit(self.db.transaction())
+            return record,reviews,invites,active,decision
+        snapshot=commit(self.db.transaction())
+        # Outside the transaction: shadow failures never change awards or cause retries.
+        if snapshot:
+            from rust_shadow import compare
+            status=compare(*snapshot)
+            if status!='disabled':print('Rust shadow:',status,flush=True)
 
     def export_decisions(self):
         from google.cloud.firestore_v1.base_query import FieldFilter

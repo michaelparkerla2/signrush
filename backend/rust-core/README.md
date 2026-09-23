@@ -1,6 +1,6 @@
 # SignRush Rust core
 
-Account-free preparation toward Sam's Rust preference. This is a tested policy library, not a deployed backend or an HTTP service. No external Rust dependencies, cloud resources, credentials, new databases, or copied corpus data are required.
+Account-free preparation toward Sam's Rust preference. This is a tested policy library, not a deployed backend or an HTTP service. The policy modules use the Rust standard library; the comparison executable uses pinned serde_json with a committed lockfile. No cloud resources, credentials, new databases or copied corpus data are required.
 
 Run from the repository root:
 
@@ -32,3 +32,7 @@ The Python oracle generates 135 deterministic synthetic decision cases. Run `pyt
 Keep the current Firebase projects and GCS buckets. Sam can later supply an existing Cloudflare account and narrowly scoped deployment access if Workers is selected. Do not create another account, database or storage location by default. Cloudflare integration still needs runtime/SDK selection, an authenticated Firebase/GCS adapter, secure configuration, transactional concurrency tests, deployment and rollback verification. Heavy FFmpeg processing remains on an appropriate existing compute service until a tested replacement is selected.
 
 The live Python worker is unchanged; this library does not make task processing always-on. No Cloudflare Worker, Wrangler project or Rust endpoint has been deployed.
+
+## Comparison-only worker integration
+
+`src/bin/signrush-shadow.rs` accepts a bounded private JSON payload over stdin and returns the Python-shaped decision. `tools/rust_shadow.py` supplies the existing authoritative Unicode normalization and invokes the executable only when `SIGNRUSH_RUST_SHADOW_BIN` is configured. `ConsensusWorker.qualify` compares after committing; only match/mismatch/unavailable statuses are logged. This is disabled by default and not activated on the live worker. See [the migration runbook](../../docs/RUST_MIGRATION_RUNBOOK.md) for builds, emulator tests, activation gates and rollback.

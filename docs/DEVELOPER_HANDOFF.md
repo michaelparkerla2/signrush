@@ -178,3 +178,7 @@ The owner requests no new accounts or storage locations. Continue preparation lo
 ### Rust consensus and reward preparation
 
 The Rust core now includes the exact-match consensus decision stage, legacy/checked identity resolution, and a pure test-reward planner. Python-generated synthetic fixtures cover 135 cases; see `tools/generate_rust_consensus_fixtures.py`. Full Rust normalization, authenticated Firebase/Firestore adapters, transactional reservations/ledger writes and Cloudflare deployment are still outstanding. No cash activation or production cutover occurred. Identity cycles are a known legacy ambiguity: new reward planning rejects them; adapters must use the checked resolver. Existing Python/live behavior was not changed.
+
+### Comparison-only integration (2026-09-23)
+
+See `docs/RUST_MIGRATION_RUNBOOK.md`. The Python worker now has an off-by-default, post-transaction Rust comparison hook, with bounded input/time and content-free status logging. Existing Python Unicode normalization supplies the comparison protocol; a standalone Rust normalizer remains a separate cutover gate. `SIGNRUSH_RUST_SHADOW_BIN` is not set on the live worker. No live deployment, schema changes or new accounts/storage occurred.

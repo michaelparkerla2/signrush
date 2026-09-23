@@ -72,4 +72,19 @@ class Qualification(unittest.TestCase):
   self.assertNotEqual(first,second)
   self.assertTrue(self.db.document('pilotRecordings/'+first).get().exists)
   self.assertTrue(self.db.document('pilotRecordings/'+second).get().exists)
+ def test_shadow_failure_does_not_change_awards_or_duplicate_them(self):
+  from unittest.mock import patch
+  self.answers()
+  with patch('rust_shadow.compare',return_value='unavailable') as shadow:
+   self.w.qualify(self.record);self.w.qualify(self.record)
+   self.assertEqual(shadow.call_count,2)
+  self.assertEqual(len(list(self.db.collection('rewardEvents').stream())),4)
+  self.assertEqual(self.db.document('playerRewards/signer').get().to_dict()['points'],12)
+ def test_shadow_mismatch_never_overrides_python_qualification(self):
+  from unittest.mock import patch
+  self.answers()
+  with patch('rust_shadow.compare',return_value='mismatch'):
+   self.w.qualify(self.record)
+  self.assertEqual(self.record.get().to_dict()['consensus']['status'],'approved')
+  self.assertEqual(self.db.document('playerRewards/signer').get().to_dict()['points'],12)
 if __name__=='__main__':unittest.main()
