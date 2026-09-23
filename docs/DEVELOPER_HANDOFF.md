@@ -170,3 +170,7 @@ Priorities: durable worker hosting; scalable task/budget limits; curated phrase 
 Before changing production rules/worker state, record the deployed commit and keep a known-good checkout. To roll back code, deploy a previous known-good Git revision using the same explicit project IDs and restart the matching worker. Git rollback does not undo Firestore writes, consent, upload grants, ledger events or media changes. Cloud soft delete alone is not a tested whole-system backup. There is no automated production database backup/restore workflow in this repo yet.
 
 Logs may identify failures by exception type without the full cause. Diagnose with targeted privileged reads in the cloud; do not print credentials, full job documents or hidden responses into shared tickets. Keep failed data and uncertainty intact rather than editing history to make tests pass.
+
+## Account-free Rust preparation (2026-09-23)
+
+The owner requests no new accounts or storage locations. Continue preparation locally using existing resources; obtain required deployment accounts/access from Sam later. `backend/rust-core` now contains a dependency-free Rust review-eligibility library with offline unit tests. It is not integrated or deployed. See its README for transaction/identity adapter requirements and deliberate fail-closed differences from Python. Current Python/Firebase/GCS behavior stays in place. Cloudflare access, authenticated adapters, parity/concurrency validation and deployment remain outstanding; do not describe the migration as complete.
