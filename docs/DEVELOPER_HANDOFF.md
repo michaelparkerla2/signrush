@@ -160,7 +160,7 @@ The owner must identify each collaborator’s **GitHub username and Google accou
 - IAM administration and billing ownership are separate from building and retrieving data. Record actual grants when the owner supplies the recipients; no collaborator cloud grants are implied by this document.
 - Cloudflare membership/Workers deployment permissions will be needed for the future Rust/Workers backend. No Worker, R2/D1 database, Wrangler project or Cloudflare migration has been set up yet.
 
-Exact IAM roles and inherited organization policies must be inspected before granting. No access for Sam/maintainer has been verified until their identities are supplied and invitations/permissions are applied.
+Sam and maintainer’s configured identities, exact role grants, GitHub invitation status and access boundaries are recorded in [the collaborator access register](COLLABORATOR_ACCESS.md). Consult it for the current access setup; verify their own sessions at first use.
 
 ## 10. Known gaps and recovery
 

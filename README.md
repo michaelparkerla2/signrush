@@ -2,7 +2,7 @@
 
 UMI’s mobile-first ASL game and private corpus project. Live pilot: **https://signrush-login.web.app/**.
 
-**Start here: [Developer handoff and operations](docs/DEVELOPER_HANDOFF.md).** This is the current source of truth; dated setup notes record earlier milestones and can describe states that have since changed.
+**Start here: [Developer handoff and operations](docs/DEVELOPER_HANDOFF.md).** Developer permissions and first-use steps are in the [access register](docs/COLLABORATOR_ACCESS.md). This is the current source of truth; dated setup notes record earlier milestones and can describe states that have since changed.
 
 ## Live implementation
 
