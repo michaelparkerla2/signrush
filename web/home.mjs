@@ -25,7 +25,7 @@ export class Home {
  connect(service){
   this.reset();this.active=true;const epoch=this.epoch;
   if(service.payout)this.payout.connect(service.payout);
-  this.el('home-message').textContent='A little signing. A little progress. Your next challenge awaits.';
+  this.el('home-message').textContent='Two ways to play. One goal: make every meaning count.';
   for(const id of ['home-sign-count','home-review-count','home-pending','home-approved','home-submitted'])this.el(id).textContent='…';
   this.el('home-sign').disabled=true;this.el('home-review').disabled=true;
   this.stops.push(service.tasks(d=>{

@@ -15,3 +15,13 @@ Cash out opens a modal wallet with live test points, zero pilot cash balance, a 
 The owner confirmed the $5,000 bonus pool is planned and not funded. Its display therefore shows a target, $0 funding and not-open status, not a live contest or growing funded prize. High performance in both roles is a visible proposed eligibility condition. Exact ranking, minimum task counts, tie-breaks and contest dates still need definition.
 
 Share uses the device share sheet, X/Facebook compose links or Copy link. No messages are sent automatically. The shared wording identifies the invitation-only private pilot. These links do not track referrals or grant points: a future referral system must verify a distinct new member and qualifying activity before rewards. No payment details are collected.
+
+## Arcade visual system and player profiles (September 23)
+
+New shared midnight/lime/violet/gold theme covers the landing page, game home, recording, decoding, wallet, account and dialogs. Eight original SVG avatars and four matching SVG trophies live in `web/assets`. The wordmark remains text for a future logo replacement. Motion respects reduced-motion preferences. No external artwork or font service is required.
+
+`gameProfiles/{uid}` is owner-only: alias, avatar, listed boolean, updatedAt. Players explicitly choose whether to list themselves. `leaderboard/{uid}` exposes only nickname, avatar, server-checked test points and update time to consenting players; max query limit 50. A Firestore transaction reads the private reward wallet and profile before publishing. Rules require exact equality to server-owned reward points and forbid extra fields. Scores refresh when listed players visit or their reward snapshot changes; this is not an always-on ranking worker. Ordering is points descending, then Firestore document ID for ties. It is an all-time pilot board, not a cash contest.
+
+Unchecking leaderboard participation removes the entry atomically with the preference change. Consent withdrawal deletes both the public entry and the game profile in the consent transaction; rules reject withdrawal that leaves a leaderboard entry. Admin suspension should also delete an existing leaderboard entry. Raw user IDs are document keys but emails, consent records, videos, prompts and payout data are never included.
+
+Every 25 points produces the next level and star. Trophies unlock at 25, 100, 250 and 500 approved test points. A live points increase produces a dismissible celebration; initial page loading does not claim a new award. These are display achievements with no additional points or cash issued. No fabricated competitors or scores are seeded in production. Synthetic fixtures are local QA only.

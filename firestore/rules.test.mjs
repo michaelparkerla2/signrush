@@ -1,7 +1,7 @@
 import {before,after,beforeEach,test} from 'node:test';
 import {readFile} from 'node:fs/promises';
 import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/rules-unit-testing';
-import {doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,writeBatch,serverTimestamp,Timestamp} from 'firebase/firestore';
+import {doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,query,limit,orderBy,writeBatch,serverTimestamp,Timestamp} from 'firebase/firestore';
 let env;
 before(async()=>{env=await initializeTestEnvironment({projectId:'demo-signrush-rules',firestore:{host:'127.0.0.1',port:8180,rules:await readFile('firestore.rules','utf8')}});});
 after(async()=>env?.cleanup());
@@ -176,4 +176,33 @@ test('payout preferences are owner-only, validated and never an award or verifie
  await assertFails(setDoc(ref,{...value,method:'venmo',destination:'synthetic-user',usResident:false}));
  await assertFails(setDoc(ref,{...value,method:'venmo',destination:'https://venmo.com/user',usResident:true}));
  await consent(d,'withdraw','withdrawn');await assertFails(setDoc(ref,value));await assertSucceeds(getDoc(ref));await assertSucceeds(deleteDoc(ref));
+});
+
+test('avatar profiles are private and leaderboard scores cannot be invented',async()=>{
+ const d=db();await create(d);await consent(d,'one');
+ const p={alias:'Swift Signer',avatar:'sprout',listed:true,updatedAt:serverTimestamp()};
+ const e={alias:p.alias,avatar:p.avatar,points:0,updatedAt:serverTimestamp()};
+ await assertFails(setDoc(doc(d,'leaderboard/alice'),e));
+ const join=writeBatch(d);join.set(doc(d,'gameProfiles/alice'),p);join.set(doc(d,'leaderboard/alice'),e);await assertSucceeds(join.commit());
+ await assertFails(getDoc(doc(db('bob'),'gameProfiles/alice')));
+ await assertFails(setDoc(doc(d,'gameProfiles/alice'),{...p,avatar:'external-url'}));
+ await assertFails(setDoc(doc(d,'leaderboard/alice'),{...e,points:999}));
+ await assertFails(setDoc(doc(d,'leaderboard/alice'),{...e,email:'a@b.co'}));
+ await assertFails(setDoc(doc(d,'leaderboard/bob'),e));
+ await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'playerRewards/alice'),{points:35,mode:'test'}));
+ await assertSucceeds(setDoc(doc(d,'leaderboard/alice'),{...e,points:35}));
+ await assertFails(setDoc(doc(d,'leaderboard/alice'),{...e,points:0}));
+ await assertFails(getDocs(collection(d,'leaderboard')));
+ await assertSucceeds(getDocs(query(collection(d,'leaderboard'),orderBy('points','desc'),limit(50))));
+ await assertFails(getDocs(query(collection(env.unauthenticatedContext().firestore(),'leaderboard'),limit(50))));
+ await assertFails(setDoc(doc(d,'gameProfiles/alice'),{...p,listed:false}));
+ const leave=writeBatch(d);leave.set(doc(d,'gameProfiles/alice'),{...p,listed:false});leave.delete(doc(d,'leaderboard/alice'));await assertSucceeds(leave.commit());
+ await assertFails(setDoc(doc(d,'leaderboard/alice'),{...e,points:35}));
+});
+test('withdrawal atomically removes a public leaderboard entry',async()=>{
+ const d=db();await create(d);await consent(d,'one');
+ const join=writeBatch(d);join.set(doc(d,'gameProfiles/alice'),{alias:'Tester',avatar:'nova',listed:true,updatedAt:serverTimestamp()});join.set(doc(d,'leaderboard/alice'),{alias:'Tester',avatar:'nova',points:0,updatedAt:serverTimestamp()});await join.commit();
+ await assertFails(consent(d,'two','withdrawn'));
+ const b=writeBatch(d);b.set(doc(d,'players/alice/consents/two'),{action:'withdrawn',termsVersion:'pilot-v1',disclosureVersion:'training-v1',recordedAt:serverTimestamp()});b.update(doc(d,'players/alice'),{lastConsentId:'two',consentAccepted:false,updatedAt:serverTimestamp()});b.delete(doc(d,'leaderboard/alice'));b.delete(doc(d,'gameProfiles/alice'));await assertSucceeds(b.commit());
+ await assertFails(setDoc(doc(d,'leaderboard/alice'),{alias:'Tester',avatar:'nova',points:0,updatedAt:serverTimestamp()}));
 });

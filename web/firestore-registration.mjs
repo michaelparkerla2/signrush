@@ -35,6 +35,7 @@ export function firestoreRegistration(auth, db, sdk, disclosure) {
      if(!snap.exists() || (body.accept && snap.data().status!=='active'))throw Object.assign(new Error('blocked'),{code:'permission-denied'});
      tx.set(event,{action:body.accept?'accepted':'withdrawn',termsVersion:body.terms_version,disclosureVersion:body.disclosure_version,recordedAt:serverTimestamp()});
      tx.update(profile,{lastConsentId:event.id,consentAccepted:body.accept,updatedAt:serverTimestamp()});
+     if(!body.accept){tx.delete(doc(db,'leaderboard',user.uid));tx.delete(doc(db,'gameProfiles',user.uid));}
     });
     return response({accepted:body.accept});
    }

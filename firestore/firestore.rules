@@ -69,6 +69,34 @@ service cloud.firestore {
      && request.resource.data.text.size() <= 1000 && request.resource.data.submittedAt == request.time)
    );
   }
+  function gameShape(d) {
+   return d.alias is string && d.alias.matches('^[A-Za-z][A-Za-z0-9 _-]{2,19}$')
+    && d.avatar in ['sprout','orbit','blaze','ripple','nova','comet','peach','pixel']
+    && d.updatedAt == request.time;
+  }
+  match /gameProfiles/{uid} {
+   allow get, delete: if enrolledAccount(uid);
+   allow list: if false;
+   allow create, update: if participating(uid)
+    && request.resource.data.keys().hasOnly(['alias','avatar','listed','updatedAt'])
+    && gameShape(request.resource.data) && request.resource.data.listed is bool
+    && (request.resource.data.listed || !existsAfter(/databases/$(database)/documents/leaderboard/$(uid)));
+  }
+  match /leaderboard/{uid} {
+   allow get: if enrolledAccount(uid) || (request.auth != null && participating(request.auth.uid));
+   allow list: if request.auth != null && participating(request.auth.uid) && request.query.limit <= 50;
+   allow delete: if enrolledAccount(uid);
+   allow create, update: if participating(uid)
+    && getAfter(/databases/$(database)/documents/players/$(uid)).data.consentAccepted == true
+    && request.resource.data.keys().hasOnly(['alias','avatar','points','updatedAt'])
+    && gameShape(request.resource.data)
+    && getAfter(/databases/$(database)/documents/gameProfiles/$(uid)).data.listed == true
+    && request.resource.data.alias == getAfter(/databases/$(database)/documents/gameProfiles/$(uid)).data.alias
+    && request.resource.data.avatar == getAfter(/databases/$(database)/documents/gameProfiles/$(uid)).data.avatar
+    && request.resource.data.points is int && request.resource.data.points >= 0
+    && request.resource.data.points == (exists(/databases/$(database)/documents/playerRewards/$(uid))
+     ? get(/databases/$(database)/documents/playerRewards/$(uid)).data.points : 0);
+  }
   match /payoutPreferences/{uid} {
    allow get, delete: if enrolledAccount(uid);
    allow list: if false;
@@ -112,7 +140,8 @@ service cloud.firestore {
     && eventShape(getAfter(/databases/$(database)/documents/players/$(uid)/consents/$(request.resource.data.lastConsentId)).data)
     && request.resource.data.consentAccepted ==
       (getAfter(/databases/$(database)/documents/players/$(uid)/consents/$(request.resource.data.lastConsentId)).data.action == 'accepted')
-    && (resource.data.status == 'active' || request.resource.data.consentAccepted == false);
+    && (resource.data.status == 'active' || request.resource.data.consentAccepted == false)
+    && (request.resource.data.consentAccepted || !existsAfter(/databases/$(database)/documents/leaderboard/$(uid)));
    match /consents/{eventId} {
     allow get: if enrolledAccount(uid);
     allow list, update, delete: if false;

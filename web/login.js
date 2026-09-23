@@ -5,6 +5,9 @@ import {pilotDisclosure} from './pilot-disclosure.mjs';
 import {Signing,signingService} from './signing.mjs';
 import {Review,reviewService} from './review.mjs';
 import {Home,homeService} from './home.mjs';
+import {Game,gameService} from './game.mjs';
+const game=new Game(document);
+let gameContext=null;
 const home=new Home(document.querySelector('#home'),document);
 let homeContext=null;
 const signing=new Signing(document.querySelector('#signing'));
@@ -17,6 +20,8 @@ function showMode(mode){
  }
  taskMode=mode;
  home.root.hidden=mode!=='home';
+ document.getElementById('arena').hidden=mode!=='arena';
+ document.getElementById('mode-arena').setAttribute('aria-pressed',String(mode==='arena'));
  document.getElementById('mode-home').setAttribute('aria-pressed',String(mode==='home'));
  document.getElementById('test-rewards').hidden=mode==='home';
  document.getElementById('mode-sign').setAttribute('aria-pressed',String(mode==='sign'));
@@ -24,6 +29,8 @@ function showMode(mode){
  signing.root.hidden=mode!=='sign';reviewing.root.hidden=mode!=='review';
  if(mode!=='review')reviewing.el('review-video').pause();
 }
+document.getElementById('mode-arena').onclick=()=>showMode('arena');
+document.getElementById('home-arena').onclick=()=>showMode('arena');
 document.getElementById('mode-home').onclick=()=>showMode('home');
 document.getElementById('home-sign').onclick=()=>{showMode('sign');signing.requestPhrase();};
 document.getElementById('home-review').onclick=()=>{showMode('review');reviewing.request();};
@@ -70,6 +77,8 @@ const registration=new Onboarding(state=>{
  if(ready && reviewContext && !reviewing.active)reviewing.connect(reviewContext());
  else if(!ready && reviewing.active)reviewing.reset();
  if(ready&&homeContext&&!home.active)home.connect(homeContext());
+ if(ready&&gameContext&&!game.service)game.connect(gameContext());
+ if(!ready){game.reset();byId('arena').hidden=true;}
  if(!ready&&home.active)home.reset();
  if(ready)showMode(taskMode);
  if(justRegistered)openPayout(true);
@@ -128,6 +137,7 @@ try {
  sdk.onAuthStateChanged(auth,user=>{
   rewardUnsubscribe?.();rewardUnsubscribe=null;currentUser=user;
   rewardContext=user?()=>firestoreSDK.onSnapshot(firestoreSDK.doc(firestoreSDK.getFirestore(app),'playerRewards',user.uid),s=>{if(currentUser?.uid===user.uid)byId('test-points').textContent=`${s.exists()?s.data().points:0} points`;},()=>{byId('test-points').textContent='Points unavailable';}):null;
+  gameContext=user?()=>gameService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
   homeContext=user?()=>homeService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
   signingContext=user?()=>signingService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
   reviewContext=user?()=>reviewService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
