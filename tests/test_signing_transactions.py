@@ -33,9 +33,10 @@ class Transactions(unittest.TestCase):
   ref=self.db.document('signingJobs/'+uid);ref.set({'uid':uid,'state':'requested','requestedAt':firestore.SERVER_TIMESTAMP});return ref
  def test_concurrent_reservations_are_globally_capped(self):
   refs=[self.player('p'+str(i)) for i in range(6)]
-  with ThreadPoolExecutor(max_workers=6) as pool:list(pool.map(self.w.assign,refs))
+  with patch('tools.signing_worker.MAX_TASKS',3):
+   with ThreadPoolExecutor(max_workers=6) as pool:list(pool.map(self.w.assign,refs))
   self.assertEqual(sum(r.get().to_dict()['state']=='assigned' for r in refs),3)
-  self.assertEqual(self.db.document('pilotLimits/signing-v1').get().to_dict()['reserved'],3)
+  self.assertEqual(self.db.document('pilotLimits/daily-use-v1').get().to_dict()['reserved'],3)
  def test_withdrawn_player_is_blocked_server_side(self):
   ref=self.player('p');self.db.document('players/p').update({'consentAccepted':False});self.w.assign(ref)
   self.assertEqual(ref.get().to_dict()['state'],'blocked')
@@ -64,7 +65,7 @@ class Transactions(unittest.TestCase):
   ref.update({'grantStartedAt':datetime.now(timezone.utc)-timedelta(seconds=91)})
   self.w.grant(ref)
   self.assertEqual(ref.get().to_dict()['state'],'uploading')
-  self.assertEqual(self.db.document('pilotLimits/signing-v1').get().to_dict()['reserved'],1)
+  self.assertEqual(self.db.document('pilotLimits/daily-use-v1').get().to_dict()['reserved'],1)
  def test_consent_withdrawn_during_session_creation_blocks_publication(self):
   ref=self.player('p');self.w.assign(ref)
   ref.update({'state':'upload_requested','size':9,'mime':'video/webm','sha256':'a'*64})
@@ -73,4 +74,20 @@ class Transactions(unittest.TestCase):
    return 'private-capability'
   with patch.object(Blob,'create_resumable_upload_session',side_effect=withdraw):self.w.grant(ref)
   job=ref.get().to_dict();self.assertEqual(job['state'],'blocked');self.assertNotIn('uploadURL',job)
+ def test_daily_batch_balances_coverage_and_preserves_prompt_provenance(self):
+  for i in range(4):self.w.assign(self.player('daily'+str(i)))
+  rows=[x.to_dict() for x in self.db.collection('pilotRecordings').stream()]
+  self.assertEqual(len({r['phrase']['id'] for r in rows}),4)
+  self.assertTrue(all(r['promptVersion']==1 and r['batch']=='daily-use-v1' and r['corpusSignerId']==r['uid'] for r in rows))
+  self.assertEqual(sum(self.db.document('promptCoverage/daily-use-v1').get().to_dict().values()),4)
+ def test_aliases_cannot_reserve_same_meaning_twice(self):
+  ref=self.player('first');self.w.assign(ref);first=ref.get().to_dict()['promptId']
+  second=self.player('second');self.db.document('pilotInvites/second').update({'samePersonAs':'first'})
+  self.w.assign(second);self.assertNotEqual(second.get().to_dict()['promptId'],first)
+ def test_filled_batch_returns_blocked_without_increment(self):
+  from tools.signing_worker import PHRASES
+  self.db.document('promptCoverage/daily-use-v1').set({p['id']:10 for p in PHRASES})
+  ref=self.player('p');self.w.assign(ref)
+  self.assertEqual(ref.get().to_dict()['state'],'blocked')
+  self.assertFalse(self.db.document('pilotLimits/daily-use-v1').get().exists)
 if __name__=='__main__':unittest.main()

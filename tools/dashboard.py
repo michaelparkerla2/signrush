@@ -1,9 +1,9 @@
 """Sanitized, bounded pilot task summaries. No prompts or peer answers."""
 from consensus import person_key
 from review_worker import can_review
-from signing_worker import PHRASES,MAX_TASKS
+from signing_worker import PHRASES,MAX_TASKS,TARGET_SIGNERS
 
-def summary(uid,records,reviews,invites,activity,reserved):
+def summary(uid,records,reviews,invites,activity,reserved,coverage=None):
     own=[r for r in records if r.get('uid')==uid]
     mine=[r for r in reviews if r.get('uid')==uid and r.get('status')=='pending']
     exposed={r.get('phrase',{}).get('id') for r in own}|set(activity.get('signingPhraseIds',[]))|set(activity.get('reviewedPhraseIds',[]))
@@ -20,6 +20,6 @@ def summary(uid,records,reviews,invites,activity,reserved):
         if review['reviewId'] in decision.get('rewardReviewIds',[]):approved+=1
         elif review['reviewId'] in decision.get('excludedReviews',{}):tests+=1
         else:pending+=1
-    return {'signAvailable':max(0,MAX_TASKS-reserved) if any(p['id'] not in activity.get('reviewedPhraseIds',[]) for p in PHRASES) else 0,
+    return {'signAvailable':min(max(0,MAX_TASKS-reserved),sum(p['id'] not in exposed and (coverage or {}).get(p['id'],0)<TARGET_SIGNERS for p in PHRASES)),
             'reviewAvailable':len(available),'submitted':sum(r.get('status') in ('saved','failed') for r in own)+len(mine),
             'pending':pending,'approved':approved,'testTasks':tests,'mode':'test'}

@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import time
 
-from signing_worker import Worker, MAX_BYTES, RAW
+from signing_worker import Worker, MAX_BYTES, RAW, MAX_RECORDINGS
 from consensus import person_key
 
 PLAYBACK_SIGNER = 'signrush-playback@signrush.iam.gserviceaccount.com'
@@ -30,13 +30,13 @@ def can_review(record, uid, exposed):
 
 class ReviewWorker(Worker):
     def independent(self, tx, signer, reviewer):
-        invites={u:(self.db.document('pilotInvites/'+u).get(transaction=tx).to_dict() or {}) for u in {signer,reviewer}}
+        invites=self.identities(tx,{signer,reviewer})
         return person_key(signer,invites)!=person_key(reviewer,invites)
 
     def choose(self, ref):
         from google.cloud.firestore_v1.base_query import FieldFilter
-        # The collection is bounded by the three-recording pilot reservation cap.
-        candidates=list(self.db.collection('pilotRecordings').where(filter=FieldFilter('status','==','saved')).limit(3).stream())
+        # The collection is bounded by the bounded batch reservation cap.
+        candidates=list(self.db.collection('pilotRecordings').where(filter=FieldFilter('status','==','saved')).limit(MAX_RECORDINGS).stream())
         secrets.SystemRandom().shuffle(candidates)
         @self.fs.transactional
         def commit(tx):
@@ -46,15 +46,16 @@ class ReviewWorker(Worker):
             if not self.consent(tx,uid):tx.update(ref,{'state':'blocked'});return
             activity_ref=self.db.document('pilotActivity/'+uid)
             activity=activity_ref.get(transaction=tx).to_dict() or {}
-            identity=(self.db.document('pilotInvites/'+uid).get(transaction=tx).to_dict() or {})
-            invites={uid:identity}
+            invites=self.identities(tx,[uid])
+            person=person_key(uid,invites)
+            person_ref=self.db.document('promptParticipants/'+person)
+            history=person_ref.get(transaction=tx).to_dict() or {}
             own=list(self.db.collection('pilotRecordings').where(filter=FieldFilter('uid','==',uid)).stream(transaction=tx))
-            exposed={s.to_dict().get('phrase',{}).get('id') for s in own} | set(activity.get('signingPhraseIds',[])) | set(activity.get('reviewedPhraseIds',[]))
+            exposed={s.to_dict().get('phrase',{}).get('id') for s in own} | set(activity.get('signingPhraseIds',[])) | set(activity.get('reviewedPhraseIds',[])) | set(history.get('meaningIds',[]))
             chosen=None
             for candidate in candidates:
                 record=candidate.reference.get(transaction=tx).to_dict() or {}
-                for other in [record.get('uid'),*record.get('reviewerIds',[])]:
-                    if other and other not in invites:invites[other]=self.db.document('pilotInvites/'+other).get(transaction=tx).to_dict() or {}
+                self.identities(tx,[other for other in [record.get('uid'),*record.get('reviewerIds',[])] if other],invites)
                 independent=person_key(uid,invites) not in {person_key(other,invites) for other in [record.get('uid'),*record.get('reviewerIds',[])] if other}
                 if independent and can_review(record,uid,exposed) and self.consent(tx,record['uid']):
                     chosen=(candidate.reference,record);break
@@ -64,6 +65,7 @@ class ReviewWorker(Worker):
             review={'uid':uid,'recordingId':recording.id,'phraseId':record['phrase']['id'],'status':'assigned',
                     'createdAt':self.fs.SERVER_TIMESTAMP,'mode':'test','refreshCount':0}
             tx.set(activity_ref,{**activity,'reviewedPhraseIds':list(set(activity.get('reviewedPhraseIds',[])+[record['phrase']['id']]))})
+            tx.set(person_ref,{'meaningIds':list(set(history.get('meaningIds',[]))|{record['phrase']['id']})})
             tx.create(self.db.document('pilotReviews/'+rid),review)
             tx.update(recording,{'reviewerIds':record.get('reviewerIds',[])+[uid]})
             # Only opaque review identity crosses into the participant document.

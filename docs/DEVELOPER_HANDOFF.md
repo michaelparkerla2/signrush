@@ -186,3 +186,7 @@ See `docs/RUST_MIGRATION_RUNBOOK.md`. The Python worker now has an off-by-defaul
 ### Reliability and readiness follow-up
 
 See [the reliability/readiness report](RELIABILITY_READINESS.md) for the existing-host session runner, interrupted upload recovery, queue freshness fix, read-only ledger audit and mobile QA harness. No always-on hosting or cash-payment activation is implied.
+
+## Daily-use starter batch (2026-09-25)
+
+[Daily starter v1](DAILY_STARTER_V1.md) supersedes the earlier three-recording launch limit for new assignments. The 30 stable meanings have a separate 300-reservation batch budget and balanced, linked-person-aware assignment. Legacy records remain intact. Consult this document before changing counters, prompt IDs, review exposure or dataset split policy.

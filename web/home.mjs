@@ -34,7 +34,7 @@ export class Home {
    this.el('home-sign').disabled=!(d?.signAvailable||d?.signInProgress);this.el('home-review').disabled=!(d?.reviewAvailable||d?.reviewInProgress);
    this.el('home-sign-label').textContent=d?.signInProgress?'Continue signing':'Sign a phrase';
    this.el('home-review-label').textContent=d?.reviewInProgress?'Finish your review':'Decode a sign';
-   this.el('queue-note').textContent=d?(d.signAvailable||d.reviewAvailable||d.signInProgress||d.reviewInProgress?'Pick a challenge. Pending reviews can finish while you keep going.':'You’re caught up! More challenges will appear when the pilot queue opens.'):'Checking your available challenges…';
+   this.el('queue-note').textContent=d?(d.signAvailable||d.reviewAvailable||d.signInProgress||d.reviewInProgress?'Pick a challenge. Pending reviews can finish while you keep going.':'You’re caught up! Check back for more eligible challenges.'):'Checking your available challenges…';
   },()=>{if(epoch===this.epoch)this.el('queue-note').textContent='Task counts are unavailable. Try refreshing.';}));
   this.stops.push(service.points(points=>{
    if(epoch!==this.epoch)return;const p=progress(points);

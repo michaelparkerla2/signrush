@@ -1,6 +1,6 @@
 """Bounded Cloud Shell pilot worker; no public HTTP server or local media sync.
 
-Use authorized Cloud Shell ADC. One assignment per player, three total. Browser
+Use authorized Cloud Shell ADC. One current job per player, bounded daily batch. Browser
 rules permit requests only; every persisted decision is rechecked here. Not an
 always-on production worker: explicitly bounded sessions, default 30 minutes.
 """
@@ -16,7 +16,10 @@ import time
 from datetime import datetime, timezone
 
 MAX_BYTES = 8 * 1024 * 1024
-MAX_TASKS = 3
+MAX_TASKS = 300
+MAX_RECORDINGS = 303  # Existing 3 legacy reservations plus this bounded batch
+BATCH = 'daily-use-v1'
+TARGET_SIGNERS = 10
 PROJECT = 'signrush-login'
 RAW = 'umi-signrush-raw'
 HELDOUT = 'umi-signrush-heldout-answers'
@@ -79,6 +82,20 @@ class Worker:
             event=self.db.document('players/'+uid+'/consents/'+player['lastConsentId']).get(transaction=tx).to_dict() or {}
         return eligible(invite,player,event)
 
+    def identities(self,tx,uids,known=None):
+        values={} if known is None else known
+        for uid in uids:
+            person=uid;seen=set()
+            while True:
+                if person in seen or len(seen)>=32:raise ValueError('cyclic or excessive linked identity')
+                seen.add(person)
+                if person not in values:values[person]=self.db.document('pilotInvites/'+person).get(transaction=tx).to_dict() or {}
+                linked=values[person].get('samePersonAs')
+                if not linked:break
+                if not isinstance(linked,str) or not linked or '/' in linked:raise ValueError('invalid linked identity')
+                person=linked
+        return values
+
     def assign(self,ref):
         rid=secrets.token_hex(16)
         @self.fs.transactional
@@ -89,19 +106,31 @@ class Worker:
             ok=self.consent(tx,uid)
             activity_ref=self.db.document('pilotActivity/'+uid)
             activity=activity_ref.get(transaction=tx).to_dict() or {}
-            options=[p for p in PHRASES if p['id'] not in activity.get('reviewedPhraseIds',[])]
-            counter=self.db.document('pilotLimits/signing-v1')
+            # Canonical linked identity: one reservation per meaning per known person.
+            from consensus import person_key
+            person=person_key(uid,self.identities(tx,[uid]))
+            coverage_ref=self.db.document('promptCoverage/'+BATCH)
+            coverage=coverage_ref.get(transaction=tx).to_dict() or {}
+            person_ref=self.db.document('promptParticipants/'+person)
+            history=person_ref.get(transaction=tx).to_dict() or {}
+            exposed=set(activity.get('reviewedPhraseIds',[]))|set(activity.get('signingPhraseIds',[]))|set(history.get('meaningIds',[]))
+            options=[p for p in PHRASES if p['id'] not in exposed and coverage.get(p['id'],0)<TARGET_SIGNERS]
+            counter=self.db.document('pilotLimits/'+BATCH)
             count=(counter.get(transaction=tx).to_dict() or {}).get('reserved',0)
             if not ok or count>=MAX_TASKS or not options:
                 tx.update(ref,{'state':'blocked'});return
-            phrase=secrets.choice(options)
+            lowest=min(coverage.get(p['id'],0) for p in options)
+            phrase=secrets.choice([p for p in options if coverage.get(p['id'],0)==lowest])
+            tx.set(coverage_ref,{**coverage,phrase['id']:coverage.get(phrase['id'],0)+1})
+            tx.set(person_ref,{'meaningIds':list(set(history.get('meaningIds',[]))|{phrase['id']})})
             tx.set(activity_ref,{**activity,'signingPhraseIds':list(set(activity.get('signingPhraseIds',[])+[phrase['id']]))})
             record={'uid':uid,'assignmentId':rid,'phrase':phrase,'status':'assigned',
-                    'createdAt':self.fs.SERVER_TIMESTAMP,'consentVersion':'training-v1','mode':'test'}
+                    'createdAt':self.fs.SERVER_TIMESTAMP,'consentVersion':'training-v1','mode':'test',
+                    'promptVersion':phrase['version'],'batch':BATCH,'corpusSignerId':person}
             tx.create(self.db.document('pilotRecordings/'+rid),record)
             tx.set(counter,{'reserved':count+1,'limit':MAX_TASKS})
             tx.update(ref,{'state':'assigned','assignmentId':rid,'promptId':phrase['id'],
-                           'prompt':phrase['text'],'maxBytes':MAX_BYTES,'maxSeconds':30})
+                           'prompt':phrase['text'],'promptVersion':phrase['version'],'signerInstruction':phrase['signerInstruction'],'maxBytes':MAX_BYTES,'maxSeconds':30})
         commit(self.db.transaction())
 
     def grant(self,ref):
@@ -187,7 +216,8 @@ class Worker:
             source_key=target;generation=int(copied.generation)
         receipt={'assignmentId':job['assignmentId'],'uid':job['uid'],'status':state,'bucket':RAW,
             'objectKey':source_key,'generation':str(generation),'sourceSha256':digest,'size':len(payload),
-            'phraseId':record['phrase']['id'],'technicalCheck':quality,'reviewResults':[],
+            'phraseId':record['phrase']['id'],'promptVersion':record['phrase'].get('version',1),
+            'batch':record.get('batch','legacy-v1'),'corpusSignerId':record.get('corpusSignerId',record['uid']),'technicalCheck':quality,'reviewResults':[],
             'translation':None,'mode':'test','exportEligible':False}
         answer={'assignmentId':job['assignmentId'],'originalPrompt':record['phrase'],
                 'consentVersion':record['consentVersion'],'referenceStatus':'unvalidated_prompt'}
@@ -209,7 +239,7 @@ class Worker:
     def tick(self):
         from google.cloud.firestore_v1.base_query import FieldFilter
         jobs=self.db.collection('signingJobs').where(filter=FieldFilter('state','in',
-            ['requested','upload_requested','granting','uploading','submitted'])).limit(3).stream()
+            ['requested','upload_requested','granting','uploading','submitted'])).limit(MAX_RECORDINGS).stream()
         for snap in jobs:
             job=snap.to_dict()
             try:

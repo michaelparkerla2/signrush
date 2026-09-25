@@ -3,6 +3,7 @@ import argparse
 import time
 from consensus import decide
 from review_worker import ReviewWorker
+from signing_worker import MAX_RECORDINGS,BATCH
 
 class ConsensusWorker(ReviewWorker):
     def qualify(self, ref):
@@ -15,7 +16,7 @@ class ConsensusWorker(ReviewWorker):
                 r=self.db.document('pilotReviews/'+answer['reviewId']).get(transaction=tx).to_dict()
                 if r:reviews.append(r)
             uids={record['uid']}|{r['uid'] for r in reviews}
-            invites={u:(self.db.document('pilotInvites/'+u).get(transaction=tx).to_dict() or {}) for u in uids}
+            invites=self.identities(tx,uids)
             active={u:self.consent(tx,u) for u in uids}
             decision=decide(record,reviews,invites,active)
             # Existing awards are immutable. Never manufacture a second award on retries.
@@ -67,7 +68,7 @@ class ConsensusWorker(ReviewWorker):
     def export_decisions(self):
         from google.cloud.firestore_v1.base_query import FieldFilter
         import hashlib,json
-        for snap in self.db.collection('pilotRecordings').where(filter=FieldFilter('consensusExported','==',False)).limit(3).stream():
+        for snap in self.db.collection('pilotRecordings').where(filter=FieldFilter('consensusExported','==',False)).limit(MAX_RECORDINGS).stream():
             record=snap.to_dict();decision=record['consensus']
             digest=hashlib.sha256(json.dumps(decision,sort_keys=True).encode()).hexdigest()[:24]
             self.put_json(self.raw,f'pilot/decisions/{snap.id}/{digest}.json',
@@ -80,8 +81,8 @@ class ConsensusWorker(ReviewWorker):
 
     def publish_dashboards(self):
         from dashboard import summary
-        records=[s.to_dict() for s in self.db.collection('pilotRecordings').limit(3).stream()]
-        reviews=[s.to_dict() for s in self.db.collection('pilotReviews').limit(15).stream()]
+        records=[s.to_dict() for s in self.db.collection('pilotRecordings').limit(MAX_RECORDINGS).stream()]
+        reviews=[s.to_dict() for s in self.db.collection('pilotReviews').limit(MAX_RECORDINGS*5).stream()]
         # Page through registered players, including those without legacy invites.
         query=self.db.collection('players').order_by('__name__').limit(50)
         cursor=getattr(self,'_dashboard_cursor',None)
@@ -90,13 +91,17 @@ class ConsensusWorker(ReviewWorker):
         self._dashboard_cursor=players[-1] if len(players)==50 else None
         uids={p.id for p in players}
         for record in records:uids.update([record['uid'],*record.get('reviewerIds',[])])
-        invites={u:self.db.document('pilotInvites/'+u).get().to_dict() or {} for u in uids}
-        reserved=(self.db.document('pilotLimits/signing-v1').get().to_dict() or {}).get('reserved',0)
+        invites=self.identities(None,uids)
+        coverage=self.db.document('promptCoverage/'+BATCH).get().to_dict() or {}
+        reserved=(self.db.document('pilotLimits/'+BATCH).get().to_dict() or {}).get('reserved',0)
         for player in players:
             uid=player.id;profile=player.to_dict();invite=invites[uid]
             if (invite and invite.get('active') is not True) or profile.get('status')!='active' or profile.get('consentAccepted') is not True:continue
             activity=self.db.document('pilotActivity/'+uid).get().to_dict() or {}
-            value=summary(uid,records,reviews,invites,activity,reserved)
+            from consensus import person_key
+            history=self.db.document('promptParticipants/'+person_key(uid,invites)).get().to_dict() or {}
+            activity['signingPhraseIds']=list(set(activity.get('signingPhraseIds',[]))|set(history.get('meaningIds',[])))
+            value=summary(uid,records,reviews,invites,activity,reserved,coverage)
             sign=(self.db.document('signingJobs/'+uid).get().to_dict() or {}).get('state')
             review=(self.db.document('reviewJobs/'+uid).get().to_dict() or {}).get('state')
             value['signInProgress']=sign in ('requested','assigned','upload_requested','granting','uploading','submitted')
@@ -111,10 +116,13 @@ class ConsensusWorker(ReviewWorker):
     def tick(self):
         super().tick()
         from google.cloud.firestore_v1.base_query import FieldFilter
-        for snap in self.db.collection('pilotRecordings').where(filter=FieldFilter('status','==','saved')).limit(3).stream():
-            self.qualify(snap.reference)
+        query=self.db.collection('pilotRecordings').where(filter=FieldFilter('status','==','saved')).order_by('__name__').limit(25)
+        if getattr(self,'_consensus_cursor',None):query=query.start_after(self._consensus_cursor)
+        page=list(query.stream())
+        self._consensus_cursor=page[-1] if len(page)==25 else None
+        for snap in page:self.qualify(snap.reference)
         self.export_decisions()
-        if time.monotonic()-getattr(self,'_dashboard_at',0)>10:
+        if time.monotonic()-getattr(self,'_dashboard_at',0)>60:
             self.publish_dashboards();self._dashboard_at=time.monotonic()
 
 if __name__=='__main__':
