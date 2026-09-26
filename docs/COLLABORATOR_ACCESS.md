@@ -5,7 +5,7 @@ Configured 2026-09-23 at the owner’s request. This register documents SignRush
 | Developer | GitHub | Google identity |
 |---|---|---|
 | Sam | `sam0x17` | `sam@umi.vision` |
-| maintainer | `authorized-collaborator` | `contributor@users.noreply.github.com` |
+| Deployment maintainer | Managed privately | Managed privately |
 
 ## GitHub
 

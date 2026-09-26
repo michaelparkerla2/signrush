@@ -1,6 +1,6 @@
-# Task queue correction for maintainer
+# Task queue correction
 
-This change reconciles the browser fallback introduced in 607961b with the existing 200-phrase corpus. The original goal—letting a player request a task when the dashboard is missing or outdated—is retained.
+This change reconciles the browser fallback introduced by the previous dashboard fallback change with the existing 200-phrase corpus. The original goal—letting a player request a task when the dashboard is missing or outdated—is retained.
 
 ## What changed
 
