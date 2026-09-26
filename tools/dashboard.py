@@ -1,7 +1,7 @@
 """Sanitized, bounded pilot task summaries. No prompts or peer answers."""
 from consensus import person_key
 from review_worker import can_review
-from signing_worker import PHRASES
+from signing_worker import PHRASES,BATCH
 from corpus import available,cap_for
 
 def summary(uid,records,reviews,invites,activity,reserved,coverage=None,policy=None):
@@ -23,4 +23,4 @@ def summary(uid,records,reviews,invites,activity,reserved,coverage=None,policy=N
         else:pending+=1
     return {'signAvailable':sum(p['id'] not in exposed and available((coverage or {}).get(p['id'],{}),cap_for(policy or {},p['id'])) for p in PHRASES),
             'reviewAvailable':len(review_available),'submitted':sum(r.get('status') in ('saved','failed') for r in own)+len(mine),
-            'pending':pending,'approved':approved,'testTasks':tests,'mode':'test'}
+            'pending':pending,'approved':approved,'testTasks':tests,'mode':'test','catalogBatch':BATCH}

@@ -19,7 +19,7 @@ if(mode!=='landing'){
  const game=new Game(document);
  await game.connect({board:n=>{n(['Sprout','Comet','Nova','Ripple'].map((alias,i)=>({alias,avatar:['sprout','comet','nova','ripple'][i],points:5000-i*1000})));return()=>{};},points:n=>{n(250);return()=>{};},load:async()=>({alias:'Synthetic player',avatar:'sprout',listed:false}),save:async()=>{},sync:async()=>{}});
  const home=new Home(el('home'),el('payout-dialog'));
- home.connect({tasks:n=>{n({signAvailable:1,reviewAvailable:1,submitted:8,pending:3,approved:5});return()=>{};},points:n=>{n(250);return()=>{};},payout:{load:async()=>null,save:async()=>{},remove:async()=>{}}});
+ home.connect({tasks:n=>{n({signAvailable:1,reviewAvailable:1,submitted:8,pending:3,approved:5,catalogBatch:'daily-use-v1'});return()=>{};},points:n=>{n(250);return()=>{};},payout:{load:async()=>null,save:async()=>{},remove:async()=>{}}});
  el('home').hidden=!['home','payout','wallet','avatar'].includes(mode);
  el('signing').hidden=mode!=='sign';el('reviewing').hidden=mode!=='review';el('arena').hidden=mode!=='arena';
  if(mode==='sign'){for(const id of ['capture-surface','phrase-panel','open-camera'])el(id).hidden=false;el('phrase-text').textContent='A synthetic phrase for layout review.';el('get-phrase').hidden=true;}

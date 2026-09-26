@@ -11,4 +11,7 @@ class Dashboard(unittest.TestCase):
   self.assertNotIn('phrase',str(d));self.assertNotIn('uid',d)
  def test_historical_reservations_do_not_consume_approved_capacity(self):
   self.assertEqual(summary('me',[],[],{}, {},4000)['signAvailable'],200)
+ def test_catalog_batch_is_marked_without_leaking_prompts(self):
+  fresh=summary('me',[],[],{}, {},0,{})
+  self.assertEqual(fresh['signAvailable'],200);self.assertEqual(fresh['catalogBatch'],'daily-use-v1');self.assertNotIn('I need help',str(fresh))
 if __name__=='__main__':unittest.main()

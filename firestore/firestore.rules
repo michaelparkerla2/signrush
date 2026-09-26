@@ -62,18 +62,79 @@ service cloud.firestore {
    allow get: if request.auth != null && resource.data.uid == request.auth.uid;
    allow list, update, delete: if false;
   }
+  function dailyPrompt(id) {
+   return id == "DAILY-001" ? "I need help."
+    : id == "DAILY-002" ? "I can help you."
+    : id == "DAILY-003" ? "Please wait a moment."
+    : id == "DAILY-004" ? "Please come here."
+    : id == "DAILY-005" ? "Please sit down."
+    : id == "DAILY-006" ? "Where is the bathroom?"
+    : id == "DAILY-007" ? "Please sign that again."
+    : id == "DAILY-008" ? "Please sign more slowly."
+    : id == "DAILY-009" ? "I understand."
+    : id == "DAILY-010" ? "I do not understand."
+    : id == "DAILY-011" ? "I need some water."
+    : id == "DAILY-012" ? "I am hungry."
+    : id == "DAILY-013" ? "I am tired."
+    : id == "DAILY-014" ? "I need a break."
+    : id == "DAILY-015" ? "I am ready."
+    : id == "DAILY-016" ? "I am not ready yet."
+    : id == "DAILY-017" ? "Please open the door."
+    : id == "DAILY-018" ? "Please close the door."
+    : id == "DAILY-019" ? "Please turn on the light."
+    : id == "DAILY-020" ? "Please turn off the light."
+    : id == "DAILY-021" ? "Please give me the cup."
+    : id == "DAILY-022" ? "Please put the cup on the table."
+    : id == "DAILY-023" ? "Please bring me my bag."
+    : id == "DAILY-024" ? "Please leave the bag here."
+    : id == "DAILY-025" ? "Where is my phone?"
+    : id == "DAILY-026" ? "Where are my keys?"
+    : id == "DAILY-027" ? "What time are we leaving?"
+    : id == "DAILY-028" ? "I need to go home."
+    : id == "DAILY-029" ? "I will come back tomorrow."
+    : id == "DAILY-030" ? "Thank you for helping me."
+    : "";
+  }
+  function knownDailyPrompt(id, text) {
+   return text is string && dailyPrompt(id) == text && text.size() > 0;
+  }
+  function signerInstruction() {
+   return "Express this meaning naturally in ASL, as you would in an everyday conversation. You do not need to follow the English word order. Use your own natural signing style.";
+  }
+  function claimJob(d, uid) {
+   return d.keys().hasOnly(['uid','state','requestedAt','assignmentId','promptId','prompt','promptVersion','signerInstruction','maxBytes','maxSeconds','batch'])
+    && d.uid == uid && d.state == 'assigned' && d.assignmentId.matches('^[a-f0-9]{32}$')
+    && d.requestedAt == request.time && d.promptVersion == 1 && d.batch == 'daily-use-v1'
+    && d.maxBytes == 8388608 && d.maxSeconds == 30 && d.signerInstruction == signerInstruction()
+    && knownDailyPrompt(d.promptId, d.prompt);
+  }
+  function claimAgrees(uid) {
+   let job = request.resource.data;
+   let recording = getAfter(/databases/$(database)/documents/pilotRecordings/$(job.assignmentId)).data;
+   let activity = getAfter(/databases/$(database)/documents/pilotActivity/$(uid)).data;
+   let coverage = getAfter(/databases/$(database)/documents/promptCoverage/daily-use-v1).data;
+   let limits = getAfter(/databases/$(database)/documents/pilotLimits/daily-use-v1).data;
+   return job.uid == uid && recording.uid == uid && recording.status == 'assigned'
+    && recording.assignmentId == job.assignmentId && recording.phrase.id == job.promptId
+    && recording.phrase.text == job.prompt && activity.signingPhraseIds.hasAny([job.promptId])
+    && coverage.claimId == job.assignmentId && coverage[job.promptId] is int
+    && limits.claimId == job.assignmentId && limits.reserved is int && limits.reserved <= 300 && limits.limit == 300;
+  }
   match /signingJobs/{uid} {
    allow get: if participating(uid);
    allow list, delete: if false;
-   allow create: if participating(uid)
-    && request.resource.data.keys().hasOnly(['uid','state','requestedAt'])
-    && request.resource.data.uid == uid && request.resource.data.state == 'requested'
-    && request.resource.data.requestedAt == request.time;
+   allow create: if participating(uid) && (
+    (request.resource.data.keys().hasOnly(['uid','state','requestedAt'])
+     && request.resource.data.uid == uid && request.resource.data.state == 'requested'
+     && request.resource.data.requestedAt == request.time)
+    || (claimJob(request.resource.data, uid) && claimAgrees(uid)));
    allow update: if participating(uid) && (
     (resource.data.state in ['saved','failed','blocked']
      && request.resource.data.keys().hasOnly(['uid','state','requestedAt'])
      && request.resource.data.uid == uid && request.resource.data.state == 'requested'
      && request.resource.data.requestedAt == request.time)
+    || (resource.data.state in ['requested','saved','failed','blocked']
+     && claimJob(request.resource.data, uid) && claimAgrees(uid))
     || (resource.data.state == 'assigned' && request.resource.data.state == 'upload_requested'
      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','size','mime','sha256'])
      && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 8388608
@@ -190,6 +251,92 @@ service cloud.firestore {
      && getAfter(/databases/$(database)/documents/players/$(uid)).data.updatedAt == request.time
      && getAfter(/databases/$(database)/documents/players/$(uid)).data.consentAccepted == (request.resource.data.action == 'accepted');
    }
+  }
+  function currentClaim() {
+   return getAfter(/databases/$(database)/documents/signingJobs/$(request.auth.uid)).data;
+  }
+  match /pilotActivity/{uid} {
+   allow get: if participating(uid);
+   allow list, delete: if false;
+   allow create: if participating(uid)
+    && request.resource.data.keys().hasOnly(['signingPhraseIds'])
+    && request.resource.data.signingPhraseIds.size() == 1
+    && currentClaim().state == 'assigned'
+    && request.resource.data.signingPhraseIds[0] == currentClaim().promptId;
+   allow update: if participating(uid) && activityClaim(uid);
+  }
+  function activityClaim(uid) {
+   let job = currentClaim();
+   let previous = resource.data.get('signingPhraseIds', []);
+   let next = request.resource.data.signingPhraseIds;
+   return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signingPhraseIds'])
+    && job.state == 'assigned' && job.uid == uid
+    && next.size() == previous.size() + 1 && next.hasAll(previous)
+    && !previous.hasAny([job.promptId]) && next.hasAny([job.promptId]);
+  }
+  match /pilotRecordings/{assignmentId} {
+   allow get, list, update, delete: if false;
+   allow create: if recordingClaim(assignmentId);
+  }
+  function recordingClaim(assignmentId) {
+   let data = request.resource.data;
+   let job = currentClaim();
+   return participating(data.uid) && data.uid == request.auth.uid
+    && data.keys().hasOnly(['uid','assignmentId','phrase','status','createdAt','consentVersion','mode','promptVersion','batch','corpusSignerId'])
+    && data.assignmentId == assignmentId && data.assignmentId == job.assignmentId
+    && data.status == 'assigned' && data.createdAt == request.time
+    && data.consentVersion == 'training-v1' && data.mode == 'test' && data.promptVersion == 1
+    && data.batch == 'daily-use-v1' && data.corpusSignerId == request.auth.uid
+    && job.state == 'assigned' && job.promptId == data.phrase.id && job.prompt == data.phrase.text
+    && data.phrase.keys().hasOnly(['id','version','text','signerInstruction','batch'])
+    && data.phrase.version == 1 && data.phrase.batch == 'daily-use-v1'
+    && data.phrase.signerInstruction == signerInstruction()
+    && knownDailyPrompt(data.phrase.id, data.phrase.text);
+  }
+  match /promptCoverage/{batch} {
+   allow get: if batch == 'daily-use-v1' && participating(request.auth.uid);
+   allow list, delete: if false;
+   allow create: if batch == 'daily-use-v1' && coverageCreate();
+   allow update: if batch == 'daily-use-v1' && coverageUpdate();
+  }
+  function coverageCreate() {
+   let job = currentClaim();
+   let id = job.promptId;
+   return job.state == 'assigned' && knownDailyPrompt(id, job.prompt)
+    && request.resource.data.keys().hasOnly([id, 'claimId'])
+    && request.resource.data[id] == 1 && request.resource.data.claimId == job.assignmentId;
+  }
+  function coverageUpdate() {
+   let job = currentClaim();
+   let id = job.promptId;
+   return job.state == 'assigned' && knownDailyPrompt(id, job.prompt)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([id, 'claimId'])
+    && request.resource.data[id] == resource.data.get(id, 0) + 1
+    && request.resource.data[id] <= 10
+    && request.resource.data.claimId == job.assignmentId
+    && request.resource.data.claimId != resource.data.get('claimId', '');
+  }
+  match /pilotLimits/{batch} {
+   allow get: if batch == 'daily-use-v1' && participating(request.auth.uid);
+   allow list, delete: if false;
+   allow create: if batch == 'daily-use-v1' && limitsCreate();
+   allow update: if batch == 'daily-use-v1' && limitsUpdate();
+  }
+  function limitsCreate() {
+   let job = currentClaim();
+   return job.state == 'assigned'
+    && request.resource.data.keys().hasOnly(['reserved','limit','claimId'])
+    && request.resource.data.reserved == 1 && request.resource.data.limit == 300
+    && request.resource.data.claimId == job.assignmentId;
+  }
+  function limitsUpdate() {
+   let job = currentClaim();
+   return job.state == 'assigned'
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reserved','claimId'])
+    && request.resource.data.reserved == resource.data.reserved + 1
+    && request.resource.data.reserved <= 300 && request.resource.data.limit == 300
+    && request.resource.data.claimId == job.assignmentId
+    && request.resource.data.claimId != resource.data.get('claimId', '');
   }
   // Invitations, prompts, answers, rewards, exports and every future collection
   // stay inaccessible to browser clients until separately designed and tested.

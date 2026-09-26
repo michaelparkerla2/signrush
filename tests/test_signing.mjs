@@ -28,6 +28,11 @@ test('submit does nothing without explicit framing confirmation',async()=>{
 });
 test('unsupported recorder selects no format',()=>assert.equal(recordingType({isTypeSupported:()=>false}),undefined));
 
+test('a phrase request stuck without a prompt can be retried',async()=>{
+ const {signing,service,next}=fixture();let calls=0;service.request=async()=>{calls++;return 'claimed';};
+ next({state:'requested'});await signing.requestPhrase();assert.equal(calls,1);
+ next({state:'assigned',prompt:'Synthetic test phrase'});await signing.requestPhrase();assert.equal(calls,1);
+});
 test('the assigned phrase stays explicitly quoted while recording and reviewing',()=>{
  const {signing,els}=fixture();
  for(const recording of [false,true]){signing.recording=recording;signing.draw();assert.equal(els.get('#phrase-text').textContent,'“Synthetic test phrase”');assert.equal(els.get('#capture-surface').hidden,false);}

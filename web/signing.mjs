@@ -1,4 +1,6 @@
 // Camera data is held in memory until explicit submit; no microphone requested.
+import {DAILY_BATCH,DAILY_PHRASES,MAX_TASKS,SIGNER_INSTRUCTION,TARGET_SIGNERS} from './daily-phrases.mjs';
+import {choosePhrase,coverageCounts} from './phrase-queue.mjs';
 export const MAX_BYTES=8*1024*1024;
 export const MAX_SECONDS=30;
 export function recordingType(Recorder){
@@ -59,8 +61,13 @@ export class Signing {
   if(['saved','failed','blocked'].includes(s)){this.stopCamera();this.clearClip();}
  }
  async requestPhrase(){
-  if(this.busy||(this.job&&!['saved','failed','blocked'].includes(this.job.state))||!this.active)return;this.busy=true;this.draw();const epoch=this.epoch;
-  try{await this.service.request();}catch{if(epoch===this.epoch)this.message('The phrase request wasn’t confirmed. Wait a moment, then try again.');}finally{if(epoch===this.epoch){this.busy=false;this.draw();}}
+  if(this.busy||!this.active)return;
+  const open=this.job&&!['saved','failed','blocked'].includes(this.job.state);
+  if(open&&(this.job.prompt||this.job.state!=='requested'))return;
+  this.busy=true;this.draw();const epoch=this.epoch;
+  try{const result=await this.service.request();if(epoch===this.epoch&&result==='empty')this.message('No signing phrases are open right now. Check back after more are added.');}
+  catch{if(epoch===this.epoch)this.message('The phrase request wasn’t confirmed. Wait a moment, then try again.');}
+  finally{if(epoch===this.epoch){this.busy=false;this.draw();}}
  }
  async openCamera(){
   if(this.busy||this.job?.state!=='assigned')return;
@@ -116,11 +123,45 @@ export class Signing {
   finally{clearTimeout(timer);}
  }
 }
+export async function claimSigningTask(user,db,sdk,ref){
+ const fallback=async()=>{try{await sdk.setDoc(ref,{uid:user.uid,state:'requested',requestedAt:sdk.serverTimestamp()});}catch(error){if(error?.code!=='permission-denied')throw error;}return 'fallback';};
+ try{
+  let outcome='skipped';
+  await sdk.runTransaction(db,async tx=>{
+   const activityRef=sdk.doc(db,'pilotActivity',user.uid);
+   const coverageRef=sdk.doc(db,'promptCoverage',DAILY_BATCH);
+   const limitsRef=sdk.doc(db,'pilotLimits',DAILY_BATCH);
+   const jobSnap=await tx.get(ref);
+   const activitySnap=await tx.get(activityRef);
+   const coverageSnap=await tx.get(coverageRef);
+   const limitsSnap=await tx.get(limitsRef);
+   const job=jobSnap.exists()?jobSnap.data():null;
+   if(job&&!['saved','failed','blocked','requested'].includes(job.state)){outcome='active';return;}
+   const activity=activitySnap.exists()?activitySnap.data():{};
+   const coverageDoc=coverageSnap.exists()?coverageSnap.data():null;
+   const reserved=Number(limitsSnap.exists()?limitsSnap.data().reserved:0)||0;
+   const counts=coverageCounts(coverageDoc);
+   if(reserved>=MAX_TASKS){outcome='empty';return;}
+   const phrase=choosePhrase(DAILY_PHRASES,new Set([...(activity.signingPhraseIds||[]),...(activity.reviewedPhraseIds||[])]),counts);
+   const nextCount=phrase?(counts[phrase.id]||0)+1:0;
+   if(!phrase||nextCount>TARGET_SIGNERS){outcome='empty';return;}
+   const assignmentId=[...crypto.getRandomValues(new Uint8Array(16))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+   const signingPhraseIds=[...new Set([...(activity.signingPhraseIds||[]),phrase.id])];
+   tx.set(ref,{uid:user.uid,state:'assigned',requestedAt:sdk.serverTimestamp(),assignmentId,promptId:phrase.id,prompt:phrase.text,promptVersion:phrase.version,signerInstruction:SIGNER_INSTRUCTION,maxBytes:MAX_BYTES,maxSeconds:MAX_SECONDS,batch:DAILY_BATCH});
+   if(activitySnap.exists())tx.update(activityRef,{signingPhraseIds});else tx.set(activityRef,{signingPhraseIds});
+   tx.set(sdk.doc(db,'pilotRecordings',assignmentId),{uid:user.uid,assignmentId,status:'assigned',createdAt:sdk.serverTimestamp(),consentVersion:'training-v1',mode:'test',promptVersion:phrase.version,batch:DAILY_BATCH,corpusSignerId:user.uid,phrase:{id:phrase.id,version:phrase.version,text:phrase.text,signerInstruction:SIGNER_INSTRUCTION,batch:DAILY_BATCH}});
+   if(coverageSnap.exists())tx.update(coverageRef,{[phrase.id]:nextCount,claimId:assignmentId});else tx.set(coverageRef,{[phrase.id]:nextCount,claimId:assignmentId});
+   if(limitsSnap.exists())tx.update(limitsRef,{reserved:reserved+1,claimId:assignmentId});else tx.set(limitsRef,{reserved:1,limit:MAX_TASKS,claimId:assignmentId});
+   outcome='claimed';
+  });
+  return outcome;
+ }catch(error){if(error?.code==='permission-denied')return fallback();throw error;}
+}
 export function signingService(user,db,sdk){
  const ref=sdk.doc(db,'signingJobs',user.uid);
  return {
   watch:(next,error)=>sdk.onSnapshot(ref,snap=>next(snap.exists()?snap.data():null),error),
-  request:()=>sdk.setDoc(ref,{uid:user.uid,state:'requested',requestedAt:sdk.serverTimestamp()}),
+  request:()=>claimSigningTask(user,db,sdk,ref),
   prepare:fields=>sdk.updateDoc(ref,{...fields,state:'upload_requested'}),
   finish:()=>sdk.updateDoc(ref,{state:'submitted'})
  };

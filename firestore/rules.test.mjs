@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {before,after,beforeEach,test} from 'node:test';
 import {readFile} from 'node:fs/promises';
 import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/rules-unit-testing';
-import {doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,query,limit,orderBy,writeBatch,serverTimestamp,Timestamp} from 'firebase/firestore';
+import {doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,query,limit,orderBy,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'firebase/firestore';
 let env;
 before(async()=>{env=await initializeTestEnvironment({projectId:'demo-signrush-rules',firestore:{host:'127.0.0.1',port:8180,rules:await readFile(new URL('./firestore.rules',import.meta.url),'utf8')}});});
 after(async()=>env?.cleanup());
@@ -78,6 +78,23 @@ test('signing requires current consent and only the player can read a job',async
  await assertFails(getDocs(collection(d,'signingJobs')));await assertFails(deleteDoc(ref));
  await assertFails(updateDoc(ref,{state:'assigned',prompt:'cheat'}));
 });
+test('a consented player can claim one catalog phrase and cannot invent the wording',async()=>{
+ const d=db();await create(d);await consent(d,'join');
+ const assignmentId='ab'.repeat(16);
+ const instruction='Express this meaning naturally in ASL, as you would in an everyday conversation. You do not need to follow the English word order. Use your own natural signing style.';
+ const claim=tx=>{
+  tx.set(doc(d,'signingJobs/alice'),{uid:'alice',state:'assigned',requestedAt:serverTimestamp(),assignmentId,promptId:'DAILY-001',prompt:'I need help.',promptVersion:1,signerInstruction:instruction,maxBytes:8388608,maxSeconds:30,batch:'daily-use-v1'});
+  tx.set(doc(d,'pilotActivity/alice'),{signingPhraseIds:['DAILY-001']});
+  tx.set(doc(d,'pilotRecordings/'+assignmentId),{uid:'alice',assignmentId,status:'assigned',createdAt:serverTimestamp(),consentVersion:'training-v1',mode:'test',promptVersion:1,batch:'daily-use-v1',corpusSignerId:'alice',phrase:{id:'DAILY-001',version:1,text:'I need help.',signerInstruction:instruction,batch:'daily-use-v1'}});
+  tx.set(doc(d,'promptCoverage/daily-use-v1'),{'DAILY-001':1,claimId:assignmentId});
+  tx.set(doc(d,'pilotLimits/daily-use-v1'),{reserved:1,limit:300,claimId:assignmentId});
+ };
+ await assertFails(runTransaction(d,async tx=>{tx.set(doc(d,'signingJobs/alice'),{uid:'alice',state:'assigned',requestedAt:serverTimestamp(),assignmentId,promptId:'DAILY-001',prompt:'Not the catalog wording.',promptVersion:1,signerInstruction:instruction,maxBytes:8388608,maxSeconds:30,batch:'daily-use-v1'});}));
+ await assertSucceeds(runTransaction(d,async tx=>{claim(tx);}));
+ await assertFails(getDoc(doc(d,'pilotRecordings/'+assignmentId)));
+ await assertSucceeds(getDoc(doc(d,'promptCoverage/daily-use-v1')));
+ await assertFails(setDoc(doc(d,'promptCoverage/daily-use-v1'),{'DAILY-001':10,claimId:'cd'.repeat(16)}));
+});
 test('only bounded upload metadata can be added to a server assignment',async()=>{
  const d=db();await create(d);await consent(d,'join');const ref=doc(d,'signingJobs/alice');
  await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'signingJobs/alice'),{uid:'alice',state:'assigned',assignmentId:'test',prompt:'Hello.'}));
@@ -101,7 +118,9 @@ test('review requests are private and cannot select a recording or reveal refere
  await assertFails(setDoc(ref,{...job,recordingId:'chosen'}));await assertSucceeds(setDoc(ref,job));
  await assertSucceeds(getDoc(ref));await assertFails(getDoc(doc(db('bob'),'reviewJobs/alice')));
  await assertFails(getDocs(collection(d,'reviewJobs')));await assertFails(updateDoc(ref,{state:'assigned'}));
- for(const path of ['pilotReviews/secret','pilotRecordings/secret','pilotActivity/alice'])await assertFails(getDoc(doc(d,path)));
+ for(const path of ['pilotReviews/secret','pilotRecordings/secret'])await assertFails(getDoc(doc(d,path)));
+ await assertSucceeds(getDoc(doc(d,'pilotActivity/alice')));
+ await assertFails(getDoc(doc(db('bob'),'pilotActivity/alice')));
 });
 test('a review answer can be submitted once but cannot forge consensus or change the video',async()=>{
  const d=db();await create(d);await consent(d,'join');const ref=doc(d,'reviewJobs/alice');

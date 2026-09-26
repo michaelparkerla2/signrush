@@ -1,4 +1,7 @@
 import {Payout,payoutService} from './payout.mjs';
+import {DAILY_BATCH,DAILY_PHRASES} from './daily-phrases.mjs';
+import {availableCount,coverageCounts,presentQueue} from './phrase-queue.mjs';
+const ACTIVE_SIGNING=new Set(['requested','assigned','upload_requested','granting','uploading','submitted']);
 export function progress(points){
  const safe=Number.isSafeInteger(points)&&points>=0?points:0;
  return {points:safe,target:(Math.floor(safe/25)+1)*25,remaining:25-safe%25,value:safe%25};
@@ -30,11 +33,12 @@ export class Home {
   this.el('home-sign').disabled=true;this.el('home-review').disabled=true;
   this.stops.push(service.tasks(d=>{
    if(epoch!==this.epoch)return;
-   for(const [id,key] of [['home-sign-count','signAvailable'],['home-review-count','reviewAvailable'],['home-pending','pending'],['home-approved','approved'],['home-submitted','submitted']])this.el(id).textContent=d?String(d[key]??0):'…';
-   this.el('home-sign').disabled=!(d?.signAvailable||d?.signInProgress);this.el('home-review').disabled=!(d?.reviewAvailable||d?.reviewInProgress);
-   this.el('home-sign-label').textContent=d?.signInProgress?'Continue signing':'Sign a phrase';
-   this.el('home-review-label').textContent=d?.reviewInProgress?'Finish your review':'Decode a sign';
-   this.el('queue-note').textContent=d?(d.signAvailable||d.reviewAvailable||d.signInProgress||d.reviewInProgress?'Pick a challenge. Pending reviews can finish while you keep going.':'You’re caught up! Check back for more eligible challenges.'):'Checking your available challenges…';
+   const view=presentQueue(d);
+   for(const [id,key] of [['home-sign-count','signAvailable'],['home-review-count','reviewAvailable'],['home-pending','pending'],['home-approved','approved'],['home-submitted','submitted']])this.el(id).textContent=String(view[key]??0);
+   this.el('home-sign').disabled=!(view.signAvailable||view.signInProgress);this.el('home-review').disabled=!(view.reviewAvailable||view.reviewInProgress);
+   this.el('home-sign-label').textContent=view.signInProgress?'Continue signing':'Sign a phrase';
+   this.el('home-review-label').textContent=view.reviewInProgress?'Finish your review':'Decode a sign';
+   this.el('queue-note').textContent=view.signAvailable||view.reviewAvailable||view.signInProgress||view.reviewInProgress?'Pick a challenge. Pending reviews can finish while you keep going.':'You’re caught up! Check back for more eligible challenges.';
   },()=>{if(epoch===this.epoch)this.el('queue-note').textContent='Task counts are unavailable. Try refreshing.';}));
   this.stops.push(service.points(points=>{
    if(epoch!==this.epoch)return;const p=progress(points);
@@ -49,6 +53,26 @@ export class Home {
 }
 export function homeService(user,db,sdk){return {
  payout:payoutService(user,db,sdk),
- tasks:(next,error)=>sdk.onSnapshot(sdk.doc(db,'playerDashboard',user.uid),s=>next(s.exists()?s.data():null),error),
+ tasks(next,error){
+  let dash,dashReady=false,exposed=null,coverage=null,reserved=null,jobActive=null;
+  const emit=()=>{
+   if(!dashReady)return;
+   const base=dash||{};
+   if(exposed){
+    next({...base,catalogBatch:DAILY_BATCH,signAvailable:availableCount(DAILY_PHRASES,exposed,coverageCounts(coverage||{}),reserved||0),signInProgress:jobActive===null?Boolean(base.signInProgress):jobActive});
+    return;
+   }
+   next(jobActive===null?dash:{...base,signInProgress:jobActive});
+  };
+  const soft=apply=>s=>{apply(s);emit();};
+  const stops=[
+   sdk.onSnapshot(sdk.doc(db,'playerDashboard',user.uid),s=>{dash=s.exists()?s.data():null;dashReady=true;emit();},error),
+   sdk.onSnapshot(sdk.doc(db,'pilotActivity',user.uid),soft(s=>{const data=s.exists()?s.data():{};exposed=new Set([...(data.signingPhraseIds||[]),...(data.reviewedPhraseIds||[])]);}),()=>{exposed=null;emit();}),
+   sdk.onSnapshot(sdk.doc(db,'promptCoverage',DAILY_BATCH),soft(s=>{coverage=s.exists()?s.data():{};}),()=>{coverage=null;emit();}),
+   sdk.onSnapshot(sdk.doc(db,'pilotLimits',DAILY_BATCH),soft(s=>{reserved=s.exists()?Number(s.data().reserved)||0:0;}),()=>{reserved=null;emit();}),
+   sdk.onSnapshot(sdk.doc(db,'signingJobs',user.uid),soft(s=>{jobActive=ACTIVE_SIGNING.has(s.exists()?s.data().state:null);}),()=>{jobActive=null;emit();})
+  ];
+  return ()=>stops.forEach(stop=>stop());
+ },
  points:(next,error)=>sdk.onSnapshot(sdk.doc(db,'playerRewards',user.uid),s=>next(s.exists()?s.data().points:0),error)
 };}
