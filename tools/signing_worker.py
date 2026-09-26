@@ -80,7 +80,13 @@ class Worker:
         event={}
         if player.get('lastConsentId'):
             event=self.db.document('players/'+uid+'/consents/'+player['lastConsentId']).get(transaction=tx).to_dict() or {}
-        return eligible(invite,player,event)
+        if not eligible(invite,player,event):return False
+        from consensus import person_key
+        identities=self.identities(tx,[uid])
+        for person in {*identities,person_key(uid,identities)}:
+            moderation=self.db.document('accountModeration/'+person).get(transaction=tx).to_dict() or {}
+            if moderation.get('blocked'):return False
+        return True
 
     def consent_evidence(self,tx,uid):
         player=self.db.document('players/'+uid).get(transaction=tx).to_dict() or {}

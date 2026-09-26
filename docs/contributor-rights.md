@@ -1,3 +1,5 @@
+> Current Terms release: `terms-2026-09-26-v2` adds the report/strike mechanism. Prior v1 documents and manifest are preserved verbatim in `web/legal/archive/terms-2026-09-26-v1/` and Git history.
+
 # Contributor onboarding and rights evidence
 
 This release implements one affirmative, unchecked checkbox for Terms, Contributor Data & AI License and acknowledgment of the Privacy Notice, including an explicit 18+ representation. Commercial AI training, third-party dataset licensing and derived face/hand/body features are visible beside the checkbox. Full documents are linked before acceptance; no required second checkbox or public-display grant exists.

@@ -7,7 +7,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from tools.signing_worker import eligible,valid_upload,technical_check
 class Checks(unittest.TestCase):
  def test_current_consent(self):
-  invite={'active':True};p={'status':'active','mode':'test','consentAccepted':True};e={'action':'accepted','termsVersion':'terms-2026-09-26-v1','disclosureVersion':'commercial-2026-09-26-v1','privacyVersion':'privacy-2026-09-26-v1','bundleHash':'93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7','adultConfirmed':True,'publicDisplayAllowed':False}
+  invite={'active':True};p={'status':'active','mode':'test','consentAccepted':True};e={'action':'accepted','termsVersion':'terms-2026-09-26-v2','disclosureVersion':'commercial-2026-09-26-v1','privacyVersion':'privacy-2026-09-26-v1','bundleHash':'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1','adultConfirmed':True,'publicDisplayAllowed':False}
   self.assertTrue(eligible(invite,p,e))
   self.assertTrue(eligible({},p,e))
   self.assertFalse(eligible({'active':False},p,e))

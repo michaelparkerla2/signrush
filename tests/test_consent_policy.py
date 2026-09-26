@@ -16,3 +16,9 @@ class ConsentPolicy(unittest.TestCase):
   self.assertTrue(current(event))
   for changes in [{'adultConfirmed':False},{'action':'withdrawn'},{'bundleHash':'old'},{'disclosureVersion':'training-v1'},{'publicDisplayAllowed':True}]:self.assertFalse(current({**event,**changes}))
   self.assertEqual(evidence(event,'person','event')['consentPath'],'players/person/consents/event')
+
+ def test_original_release_stays_preserved(self):
+  folder=ROOT/'web/legal/archive/terms-2026-09-26-v1'
+  manifest=json.loads((folder/'manifest.json').read_text())
+  for item in manifest['documents'].values():
+   self.assertEqual(hashlib.sha256((folder/Path(item['path']).name).read_bytes()).hexdigest(),item['sha256'])

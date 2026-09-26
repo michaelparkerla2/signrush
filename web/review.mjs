@@ -12,19 +12,23 @@ export class Review {
   this.el('refresh-review-video').onclick=()=>this.refresh();
   this.el('review-answer').oninput=()=>this.buttons();
   this.el('review-quality').onchange=()=>this.buttons();
+  this.el('report-video').onclick=()=>{this.reporting=true;this.draw();};
+  this.el('cancel-report').onclick=()=>{this.reporting=false;this.draw();};
+  this.el('report-reason').onchange=()=>this.buttons();
+  this.el('submit-report').onclick=()=>this.report();
   this.el('review-form').onsubmit=e=>{e.preventDefault();this.submit();};
   this.el('review-video').onerror=()=>{if(this.active){this.loadingVideo=false;this.loading(false);this.el('refresh-review-video').hidden=false;this.message('Video unavailable? Reload it and try again.');}};
   this.el('review-video').onloadeddata=()=>{this.loadingVideo=false;this.loading(false);};
   this.reset();
  }
- reset(){clearTimeout(this.waitTimer);this.waitTimer=null;this.waitKey=null;this.slow=false;this.loadingVideo=false;this.loading(false);this.epoch++;this.unsubscribe?.();this.active=false;this.busy=false;this.job=null;this.service=null;this.src=null;this.el('review-video').pause();this.el('review-video').removeAttribute('src');this.el('review-answer').value='';this.el('review-quality').value='';this.root.hidden=true;}
+ reset(){this.reporting=false;this.el('report-reason').value='';clearTimeout(this.waitTimer);this.waitTimer=null;this.waitKey=null;this.slow=false;this.loadingVideo=false;this.loading(false);this.epoch++;this.unsubscribe?.();this.active=false;this.busy=false;this.job=null;this.service=null;this.src=null;this.el('review-video').pause();this.el('review-video').removeAttribute('src');this.el('review-answer').value='';this.el('review-quality').value='';this.root.hidden=true;}
  connect(service){
   this.reset();this.active=true;this.service=service;const epoch=this.epoch;
   this.unsubscribe=service.watch(job=>{if(epoch!==this.epoch)return;this.job=job;this.draw();},()=>{if(epoch===this.epoch){this.job={state:'blocked'};this.draw();}});this.draw();
  }
  loading(value){const spinner=this.el('review-loading');if(spinner)spinner.hidden=!value;}
  message(s){this.el('review-status').textContent=s;}
- buttons(){this.el('submit-review').disabled=this.busy||this.job?.state!=='assigned'||!this.el('review-answer').value.trim()||!this.el('review-quality').value;}
+ buttons(){this.el('submit-report').disabled=this.busy||this.job?.state!=='assigned'||!['not_signing','unusable_quality'].includes(this.el('report-reason').value);this.el('report-video').disabled=this.busy;this.el('submit-review').disabled=this.busy||this.job?.state!=='assigned'||!this.el('review-answer').value.trim()||!this.el('review-quality').value;}
  draw(){
   const j=this.job,s=j?.state;
   const waiting=['requested','preparing','refresh_requested'].includes(s);
@@ -32,7 +36,9 @@ export class Review {
   this.loading((waiting&&!this.slow)||this.loadingVideo);this.root.dataset.phase=s||'idle';
   this.el('find-review').hidden=Boolean(j)&&!['empty','pending','blocked'].includes(s);this.el('find-review').disabled=this.busy;
   this.el('find-review').textContent=s==='pending'?'Review another video':s==='empty'?'Check for a video':'Find a video';
-  this.el('review-form').hidden=s!=='assigned';this.el('review-player').hidden=!['assigned','refresh_requested'].includes(s);
+  if(s!=='assigned'){this.reporting=false;this.el('report-reason').value='';}
+  this.el('report-video').hidden=s!=='assigned'||this.reporting;this.el('report-panel').hidden=s!=='assigned'||!this.reporting;
+  this.el('review-form').hidden=s!=='assigned'||this.reporting;this.el('review-player').hidden=!['assigned','refresh_requested'].includes(s);
   this.el('review-complete').hidden=s!=='pending';
   this.el('refresh-review-video').hidden=s!=='assigned';this.el('refresh-review-video').disabled=this.busy;
   const texts={idle:'Watch a signer, then write the meaning in English.',requested:'Finding a video for you… If an eligible video is available, it will load here. This may take a moment—please wait without refreshing.',empty:'No eligible videos in the latest queue update. Check again shortly. Your own recordings and phrases you’ve already seen are excluded.',preparing:'Getting your private video ready… Please wait without refreshing.',assigned:'Watch the signing. What does it mean?',refresh_requested:'Reloading the private video…',submitted:'Saving your review…',pending:'',blocked:'This review isn’t available. Sign in again to check your access.'};
@@ -46,9 +52,10 @@ export class Review {
   const reference=this.el('review-reference');
   if(reference){reference.hidden=s!=='pending'||!j?.referencePrompt;reference.textContent=s==='pending'&&j.referencePrompt?`Intended meaning (revealed after submission): ${j.referencePrompt}`:'';}
   const outcome=j?.outcome;
-  this.el('review-outcome').textContent=({approved:'Review approved',test_only:'Test review saved',ineligible:'Review not eligible',adjudication_required:'Needs a closer look'})[outcome?.status]||'Awaiting consensus';
-  this.el('review-progress').textContent=outcome?.status==='approved'?'5 test points earned. No cash value.':outcome?.status==='test_only'?'Saved for interface testing. This is not an independent review and earns no points.':outcome?.status==='adjudication_required'?'A human check is needed. No points awarded for this review.':`${outcome?.independentReviews||0} of ${outcome?.requiredReviews||3} independent reviews received.`;this.buttons();
+  this.el('review-outcome').textContent=({approved:'Review approved',test_only:'Test review saved',ineligible:'Review not eligible',report_confirmed:'Report confirmed · Video removed',report_not_upheld:'Report reviewed · Video retained',adjudication_required:'Needs a closer look'})[outcome?.status]||'Awaiting consensus';
+  this.el('review-progress').textContent=outcome?.status==='report_confirmed'?'Independent reports confirmed the video was unusable. Thank you for helping protect the corpus.':outcome?.status==='report_not_upheld'?'Independent interpretations supported this video. Your original report is preserved.':outcome?.status==='approved'?'5 test points earned. No cash value.':outcome?.status==='test_only'?'Saved for interface testing. This is not an independent review and earns no points.':outcome?.status==='adjudication_required'?'A human check is needed. No points awarded for this review.':`${outcome?.independentReviews||0} of ${outcome?.requiredReviews||3} independent reviews received.`;this.buttons();
  }
+ async report(){const reason=this.el('report-reason').value;if(this.job?.state!=='assigned'||!['not_signing','unusable_quality'].includes(reason))return;return this.action(()=>this.service.report(reason));}
  async action(fn){if(this.busy||!this.active)return;this.busy=true;this.buttons();const epoch=this.epoch;try{await fn();}catch{if(epoch===this.epoch)this.message('That update wasn’t confirmed. Please try again.');}finally{if(epoch===this.epoch){this.busy=false;this.buttons();this.el('find-review').disabled=false;this.el('refresh-review-video').disabled=false;}}}
  request(){if(this.job&&!['empty','pending','blocked'].includes(this.job.state))return;return this.action(async()=>{const epoch=this.epoch;this.loading(true);this.message('Checking available videos… Please wait without refreshing.');try{const available=this.service.availability?await this.service.availability():null;if(epoch!==this.epoch)return;if(available===false){this.job={state:'empty'};this.draw();return;}await this.service.request();}finally{if(epoch===this.epoch&&!['requested','preparing','refresh_requested'].includes(this.job?.state))this.loading(false);}});}
  refresh(){if(this.job?.state!=='assigned')return;return this.action(()=>this.service.refresh());}
@@ -59,5 +66,6 @@ export function reviewService(user,db,sdk){
  return {availability:async()=>{const snap=await sdk.getDocFromServer(sdk.doc(db,'playerDashboard',user.uid));const d=snap.exists()?snap.data():null;return freshEmptyQueue(d)?false:null;},watch:(next,error)=>sdk.onSnapshot(ref,s=>next(s.exists()?s.data():null),error),
   request:()=>sdk.setDoc(ref,{uid:user.uid,state:'requested',requestedAt:sdk.serverTimestamp()}),
   refresh:()=>sdk.updateDoc(ref,{state:'refresh_requested'}),
+  report:reportReason=>sdk.updateDoc(ref,{state:'submitted',text:'',quality:'poor',reportReason,submittedAt:sdk.serverTimestamp()}),
   submit:(text,quality)=>sdk.updateDoc(ref,{state:'submitted',text,quality,submittedAt:sdk.serverTimestamp()})};
 }

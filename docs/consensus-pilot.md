@@ -1,6 +1,6 @@
 # Meaning consensus and test rewards — current policy
 
-`meaning-panel-v2` supersedes `exact-pilot-v1` and older three-matches/0.85 proposals. This is the authoritative implemented review policy. Delivery is local code and GitHub only; maintainer controls hosting. No new service, account, paid upgrade, cash integration or automatic training export is required by this change.
+`meaning-panel-v3` supersedes `exact-pilot-v1` and older three-matches/0.85 proposals. This is the authoritative implemented review policy. Delivery is local code and GitHub only; maintainer controls hosting. No new service, account, paid upgrade, cash integration or automatic training export is required by this change.
 
 ## Independent panels
 
@@ -36,7 +36,9 @@ python tools/corpus_admin.py --project PROJECT assess-review RECORDING REVIEW \
 
 Verdicts: `equivalent`, `different`, `unrelated`. Critical dispute: `resolved` or `unresolved`. The operator must be qualified to assess ASL; the assessor field is an audit identifier, not an automated competency verification. Credentials remain the authorization boundary. Use `unresolved` when a critical question remains; never mark it resolved merely because a majority agrees.
 
-The command verifies record/review association, saves a private append-only `meaningAssessmentHistory` event, and updates the current finding on the recording. Each finding binds to the original text, quality, identity and prompt; changing them invalidates the finding. Original responses are never rewritten. Browser clients cannot read/write these private collections. The worker re-evaluates quorum on its next cycle. The command cannot override quorum or modify already-approved clips (those require separate revocation/reward audit). Rejection remains available through `reject RECORDING --reason ...`.
+The command verifies record/review association, saves a private append-only `meaningAssessmentHistory` event, and updates the current finding on the recording. Each finding binds to the original text, quality, identity and prompt; changing them invalidates the finding. Original responses are never rewritten. Browser clients cannot read/write these private collections. See [unusable-video moderation](unusable-video-moderation.md) for the independently reported rejection and three-strike path.
+
+The worker re-evaluates quorum on its next cycle. The command cannot override quorum or modify already-approved clips (those require separate revocation/reward audit). Rejection remains available through `reject RECORDING --reason ...`.
 
 ## Rewards, corpus and migration
 

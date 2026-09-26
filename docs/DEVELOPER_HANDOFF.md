@@ -1,3 +1,5 @@
+> New enforcement: [Unusable-video reports and three strikes](unusable-video-moderation.md), including idempotent point adjustments and cancellation.
+
 > Latest onboarding: [Contributor rights and private background](contributor-rights.md). Deploy matching browser, Rules and worker versions together; prior agreements do not grant the new license.
 
 > Current review policy: [Meaning consensus v2](consensus-pilot.md) supersedes older three-matches and 0.85-threshold descriptions below: 3/3 initially, then 4/5, with unresolved meaning disputes held for fluent adjudication.

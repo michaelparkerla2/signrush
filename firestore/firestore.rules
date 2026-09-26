@@ -14,18 +14,18 @@ service cloud.firestore {
     && d.uid == uid && d.mode == 'test' && d.consentAccepted is bool;
   }
   function currentConsent(d) {
-   return d.termsVersion == 'terms-2026-09-26-v1'
+   return d.termsVersion == 'terms-2026-09-26-v2'
     && d.disclosureVersion == 'commercial-2026-09-26-v1'
     && d.privacyVersion == 'privacy-2026-09-26-v1'
-    && d.bundleHash == '93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7'
+    && d.bundleHash == 'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1'
     && d.adultConfirmed == true && d.publicDisplayAllowed == false;
   }
   function eventShape(d) {
    return d.keys().hasAll(['action','termsVersion','disclosureVersion','privacyVersion','bundleHash','recordedAt','uid','email','adultConfirmed','publicDisplayAllowed'])
     && d.keys().hasOnly(['action','termsVersion','disclosureVersion','privacyVersion','bundleHash','recordedAt','uid','email','adultConfirmed','publicDisplayAllowed'])
     && d.action in ['accepted','withdrawn']
-    && d.termsVersion == 'terms-2026-09-26-v1' && d.disclosureVersion == 'commercial-2026-09-26-v1'
-    && d.privacyVersion == 'privacy-2026-09-26-v1' && d.bundleHash == '93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7'
+    && d.termsVersion == 'terms-2026-09-26-v2' && d.disclosureVersion == 'commercial-2026-09-26-v1'
+    && d.privacyVersion == 'privacy-2026-09-26-v1' && d.bundleHash == 'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1'
     && d.uid == request.auth.uid && d.email == request.auth.token.email
     && d.adultConfirmed == (d.action == 'accepted') && d.publicDisplayAllowed == false
     && d.recordedAt == request.time;
@@ -96,10 +96,11 @@ service cloud.firestore {
     || (resource.data.state == 'assigned' && request.resource.data.state == 'refresh_requested'
      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']))
     || (resource.data.state == 'assigned' && request.resource.data.state == 'submitted'
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','text','submittedAt','quality'])
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','text','submittedAt','quality','reportReason'])
      && request.resource.data.quality in ['good','poor','not_sure']
-     && request.resource.data.text is string && request.resource.data.text.size() > 0
-     && request.resource.data.text.size() <= 1000 && request.resource.data.submittedAt == request.time)
+     && request.resource.data.text is string && request.resource.data.submittedAt == request.time
+     && ((request.resource.data.get('reportReason','') == '' && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000)
+      || (request.resource.data.get('reportReason','') in ['not_signing','unusable_quality'] && request.resource.data.text == '' && request.resource.data.quality == 'poor')))
    );
   }
   function gameShape(d) {
@@ -150,6 +151,10 @@ service cloud.firestore {
   }
   match /playerDashboard/{uid} {
    allow get: if participating(uid);
+   allow list, write: if false;
+  }
+  match /playerModeration/{uid} {
+   allow get: if enrolledAccount(uid);
    allow list, write: if false;
   }
   match /playerRewards/{uid} {

@@ -43,7 +43,7 @@ function setLoginDisabled(value){login.disabled=value;enterRush.disabled=value;}
 function authStatus(message){status.textContent=message;document.querySelector('#entry-status').textContent=message;}
 const account = document.querySelector('#account');
 const byId = id=>document.getElementById(id);
-let currentUser=null,previousRegistration=null,payoutAutoOpen=false;
+let currentUser=null,previousRegistration=null,payoutAutoOpen=false,moderationUnsubscribe=null;
 function openPayout(welcome=false){
  byId('cash-wallet').close();
  byId('payout-welcome').hidden=!welcome;
@@ -148,7 +148,15 @@ try {
  const provider = new sdk.GoogleAuthProvider();
  provider.setCustomParameters({prompt:'select_account'});
  sdk.onAuthStateChanged(auth,user=>{
-  rewardUnsubscribe?.();rewardUnsubscribe=null;currentUser=user;
+  rewardUnsubscribe?.();rewardUnsubscribe=null;moderationUnsubscribe?.();moderationUnsubscribe=null;currentUser=user;
+  byId('moderation-warning').hidden=true;byId('moderation-warning').textContent='';
+  if(user)moderationUnsubscribe=firestoreSDK.onSnapshot(firestoreSDK.doc(firestoreSDK.getFirestore(app),'playerModeration',user.uid),snap=>{
+   if(currentUser?.uid!==user.uid)return;
+   const warning=snap.exists()?snap.data():null;
+   byId('moderation-warning').hidden=!warning?.strikes;
+   byId('moderation-warning').textContent=warning?.blocked?'✕ ✕ ✕ Account cancelled: three confirmed spam/non-signing incidents. Your remaining test points are forfeited. Signing and validation are disabled. You can still submit a private account/privacy request.':warning?.strikes?`✕ Warning ${warning.strikes} of 3. You must submit real, meaningful ASL. Three independent reviewers reported spam or non-signing. Points from that video are revoked; a third confirmed incident forfeits all remaining test points and blocks signing and validation.`:'';
+   if(warning?.blocked){registration.reset();registration.user=user;registration.show({phase:'suspended',message:'Signing and validation are disabled after three confirmed incidents.'});}
+  },()=>{byId('moderation-warning').hidden=true;});
   rewardContext=user?()=>firestoreSDK.onSnapshot(firestoreSDK.doc(firestoreSDK.getFirestore(app),'playerRewards',user.uid),s=>{if(currentUser?.uid===user.uid)byId('test-points').textContent=`${s.exists()?s.data().points:0} points`;},()=>{byId('test-points').textContent='Points unavailable';}):null;
   gameContext=user?()=>gameService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;
   homeContext=user?()=>homeService(user,firestoreSDK.getFirestore(app),firestoreSDK):null;

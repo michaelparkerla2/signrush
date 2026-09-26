@@ -11,7 +11,7 @@ import tempfile
 import time
 
 from signing_worker import Worker, MAX_BYTES, RAW, MAX_RECORDINGS
-from consensus import person_key
+from consensus import person_key, valid_report
 
 PLAYBACK_SIGNER = 'signrush-playback@signrush.iam.gserviceaccount.com'
 REVIEW_LIMIT = 3
@@ -23,6 +23,7 @@ def can_review(record, uid, exposed):
     return (record.get('status') == 'saved' and record.get('uid') != uid
             and record.get('phrase', {}).get('id') not in exposed
             and record.get('technicalCheck', {}).get('passed') is True
+            and record.get('corpusDisposition')!='rejected'
             and uid not in record.get('reviewerIds', [])
             and record.get('consensus',{}).get('status') not in ('approved','adjudication_required','quality_check_required','test_only','rejected','collection_full')
             and len(record.get('reviewerIds', [])) < min(5,record.get('reviewLimit',REVIEW_LIMIT)))
@@ -127,7 +128,7 @@ class ReviewWorker(Worker):
         @self.fs.transactional
         def allowed(tx):
             fresh=record_ref.get(transaction=tx).to_dict() or {}
-            return (fresh.get('status')=='saved' and fresh.get('uid')!=job['uid']
+            return (fresh.get('status')=='saved' and fresh.get('corpusDisposition')!='rejected' and fresh.get('uid')!=job['uid']
                     and self.consent(tx,job['uid']) and self.consent(tx,fresh['uid'])
                     and self.independent(tx,fresh['uid'],job['uid']))
         if not allowed(self.db.transaction()):ref.update({'state':'blocked','playbackURL':self.fs.DELETE_FIELD});return
@@ -141,7 +142,7 @@ class ReviewWorker(Worker):
             fresh=record_ref.get(transaction=tx).to_dict() or {}
             okay=(self.consent(tx,job['uid']) and self.consent(tx,record['uid']) and self.independent(tx,record['uid'],job['uid']))
             if current.get('state') not in ('preparing','refresh_requested') or r.get('status')!='assigned':return
-            if not okay or fresh.get('status')!='saved' or r.get('refreshCount',0)>=MAX_REFRESHES:
+            if not okay or fresh.get('status')!='saved' or fresh.get('corpusDisposition')=='rejected' or r.get('refreshCount',0)>=MAX_REFRESHES:
                 tx.update(ref,{'state':'blocked','playbackURL':self.fs.DELETE_FIELD});return
             tx.update(review_ref,{'refreshCount':r.get('refreshCount',0)+1})
             tx.update(ref,{'state':'assigned','playbackURL':uri,'expiresAt':datetime.now(timezone.utc)+timedelta(seconds=URL_SECONDS)})
@@ -159,10 +160,13 @@ class ReviewWorker(Worker):
             okay=self.consent(tx,job['uid']) and self.consent(tx,record.get('uid','missing')) and self.independent(tx,record.get('uid','missing'),job['uid'])
             rights=self.consent_evidence(tx,job['uid'])
             text=job.get('text','').strip()
-            if not okay or review.get('uid')!=job['uid'] or review.get('status')!='assigned' or record.get('uid')==job['uid'] or record.get('status')!='saved' or not 1<=len(text)<=1000:
+            report=valid_report(job)
+            valid_answer=report or (not job.get('reportReason') and 1<=len(text)<=1000)
+            if not okay or review.get('uid')!=job['uid'] or review.get('status')!='assigned' or record.get('uid')==job['uid'] or record.get('status')!='saved' or record.get('corpusDisposition')=='rejected' or not valid_answer:
                 tx.update(ref,{'state':'blocked','playbackURL':self.fs.DELETE_FIELD});return
             answer={'reviewId':job['reviewId'],'uid':job['uid'],'text':text,'submittedAt':job['submittedAt'],
                     'status':'pending','mode':'test','quality':job.get('quality','not_sure'),'rights':rights}
+            if report:answer['reportReason']=job['reportReason']
             tx.update(review_ref,{**answer,'exported':False})
             tx.update(record_ref,{'reviewResults':record.get('reviewResults',[])+[answer]})
             tx.update(ref,{'state':'pending','playbackURL':self.fs.DELETE_FIELD,
@@ -174,6 +178,7 @@ class ReviewWorker(Worker):
         for snap in self.db.collection('pilotReviews').where(filter=FieldFilter('exported','==',False)).limit(9).stream():
             review=snap.to_dict()
             data={k:review[k] for k in ['reviewId','recordingId','uid','text','status','mode']}
+            data['reportReason']=review.get('reportReason')
             data['quality']=review.get('quality','not_sure')
             data['rights']=review.get('rights',{'rightsStatus':'legacy_unverified'})
             data['submittedAt']=review['submittedAt'].isoformat()

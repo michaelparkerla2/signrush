@@ -4,7 +4,7 @@ import {Review,validPlaybackURL} from '../web/review.mjs';
 function fixture(){
  const els=new Map(),root={hidden:true,dataset:{},querySelector(s){if(!els.has(s))els.set(s,{hidden:true,value:'',textContent:'',pause(){},removeAttribute(){}});return els.get(s);}};
  const review=new Review(root);let next,calls=[];
- review.connect({watch:n=>{next=n;return()=>{};},request:async()=>calls.push('request'),refresh:async()=>calls.push('refresh'),submit:async t=>calls.push(t)});
+ review.connect({watch:n=>{next=n;return()=>{};},request:async()=>calls.push('request'),refresh:async()=>calls.push('refresh'),submit:async t=>calls.push(t),report:async reason=>calls.push({reportReason:reason})});
  return {review,els,next,calls};
 }
 test('only fixed short-lived private playback URLs are accepted',()=>{
@@ -48,4 +48,13 @@ test('reference appears only after the blind answer is saved, with five-review p
  assert.match(els.get('#review-reference').textContent,/Please wait/);assert.equal(els.get('#review-reference').hidden,false);
  assert.match(els.get('#review-progress').textContent,/4 of 5/);
  next({state:'requested'});assert.equal(els.get('#review-reference').textContent,'');
+});
+
+test('unusable report is a separate action without a fabricated translation',async()=>{
+ const {review,els,next,calls}=fixture();next({state:'assigned',playbackURL:'invalid'});
+ review.el('report-video').onclick();assert.equal(els.get('#report-panel').hidden,false);assert.equal(els.get('#review-form').hidden,true);
+ await review.report();assert.equal(calls.length,0);
+ review.el('report-reason').value='not_signing';await Promise.all([review.report(),review.report()]);assert.deepEqual(calls,[{reportReason:'not_signing'}]);
+ next({state:'pending',outcome:{status:'report_confirmed',independentReviews:3}});assert.match(els.get('#review-outcome').textContent,/Report confirmed/);
+ assert.equal(els.get('#report-panel').hidden,true);review.reset();assert.equal(els.get('#report-reason').value,'');
 });

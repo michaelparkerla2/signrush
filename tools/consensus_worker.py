@@ -61,7 +61,10 @@ class ConsensusWorker(ReviewWorker):
             for r in reviews:
                 job=self.db.document('reviewJobs/'+r['uid']);j=job.get(transaction=tx).to_dict() or {}
                 if j.get('reviewId')==r['reviewId']:jobs.append((job,j,r))
+            from moderation import prepare
+            apply_moderation=prepare(self,tx,ref,record,decision,invites)
             # All reads precede all writes, including consent and reward deduplication.
+            apply_moderation()
             if coverage.get(prompt)!=after:tx.set(coverage_ref,{**coverage,prompt:after})
             tx.set(signer_ref,signer)
             if record.get('corpusSplit')!=signer['split'] or record.get('corpusSignerId')!=person:
@@ -75,6 +78,8 @@ class ConsensusWorker(ReviewWorker):
             if sj.get('assignmentId')==ref.id and sj.get('outcome')!=summary:tx.update(signer_job,{'outcome':summary})
             for job,j,r in jobs:
                 if r['reviewId'] in decision['excludedReviews']:status='test_only' if decision['excludedReviews'][r['reviewId']]=='owner_or_test_account' else 'ineligible'
+                elif r.get('reportReason') and decision['status']=='rejected':status='report_confirmed'
+                elif r.get('reportReason') and decision['status']=='approved':status='report_not_upheld'
                 elif r['reviewId'] in decision['rewardReviewIds']:status='approved'
                 elif decision['status'] in ('approved','adjudication_required','quality_check_required'):status='adjudication_required'
                 else:status='awaiting_reviews'

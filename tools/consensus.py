@@ -6,8 +6,13 @@ import json
 import math
 import re
 import unicodedata
-VERSION='meaning-panel-v2'
+VERSION='meaning-panel-v3'
 MAX_REVIEWS=5
+REPORT_REASONS=('not_signing','unusable_quality')
+
+def valid_report(review):
+    return (review.get('reportReason') in REPORT_REASONS and not review.get('text','').strip()
+            and review.get('quality')=='poor')
 
 def normalize(text):
     text=unicodedata.normalize('NFKC',text).casefold().replace('’',"'")
@@ -29,15 +34,19 @@ def decide(record, reviews, invites, active):
         if invites.get(uid,{}).get('testOnly') or invites.get(identity,{}).get('testOnly') or identity==owner:reason='owner_or_test_account'
         elif not active.get(uid):reason='participation_paused'
         elif identity in seen:reason='duplicate_person'
-        elif r.get('status')!='pending' or not r.get('text','').strip():reason='incomplete'
+        elif r.get('status')!='pending' or (not valid_report(r) and (r.get('reportReason') or not r.get('text','').strip())):reason='incomplete'
         else:reason=None
         if reason:excluded[r['reviewId']]=reason
         else:accepted.append(r);seen.add(identity)
     reference=normalize(record.get('phrase',{}).get('text',''))
     matched=[];unresolved=[];outliers=[]
+    reports=[r for r in accepted if valid_report(r)]
+    spam=[r for r in reports if r['reportReason']=='not_signing']
     scores={}
     for r in accepted:
         rid=r['reviewId']
+        if valid_report(r):
+            scores[rid]=None;continue
         exact=bool(reference) and normalize(r['text'])==reference
         scores[rid]=1.0 if exact else None  # Text match only, never semantic accuracy.
         assessment=record.get('meaningAssessments',{}).get(rid,{})
@@ -63,10 +72,21 @@ def decide(record, reviews, invites, active):
             'reviewLimit':panel,'requiredAgreement':required,'agreementCount':len(matched),
             'agreementFraction':len(matched)/len(accepted) if accepted else 0,
             'unresolvedMeaningReviewIds':unresolved,'suspectedOutlierReviewIds':outliers,
-            'rewardReviewIds':[],'signerPoints':0,'reviewerPoints':5}
+            'rewardReviewIds':[],'signerPoints':0,'reviewerPoints':5,
+            'unusableReportIds':[r['reviewId'] for r in reports],
+            'spamReportIds':[r['reviewId'] for r in spam],
+            'misconductConfirmed':False}
     if not active.get(signer):result['status']='participation_paused';return result
     if invites.get(signer,{}).get('testOnly') or invites.get(owner,{}).get('testOnly'):
         result['status']='test_only';return result
+    # Reports are independent panel votes, never fabricated translations.
+    # Never reverse an established meaning consensus through automatic flag handling.
+    previous=record.get('consensus',{})
+    if len(reports)>=3 and len(accepted)<=MAX_REVIEWS and len(matched)<3:
+        if previous.get('status')=='approved' or previous.get('agreementCount',0)>=3:
+            result['status']='adjudication_required';return result
+        result.update(status='rejected',rejectionReason='unusable_video',misconductConfirmed=len(spam)>=3)
+        return result
     if len(accepted)<panel:
         result['status']='needs_more_reviews' if expanded else 'awaiting_reviews'
         if len(reviews)>=MAX_REVIEWS:result['status']='adjudication_required'

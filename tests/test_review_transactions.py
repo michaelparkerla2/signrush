@@ -23,7 +23,7 @@ class Reviews(unittest.TestCase):
  def player(self,uid):
   self.db.document('pilotInvites/'+uid).set({'active':True})
   self.db.document('players/'+uid).set({'status':'active','mode':'test','consentAccepted':True,'lastConsentId':'one'})
-  self.db.document('players/'+uid+'/consents/one').set({'action':'accepted','termsVersion':'terms-2026-09-26-v1','disclosureVersion':'commercial-2026-09-26-v1','privacyVersion':'privacy-2026-09-26-v1','bundleHash':'93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7','adultConfirmed':True,'publicDisplayAllowed':False})
+  self.db.document('players/'+uid+'/consents/one').set({'action':'accepted','termsVersion':'terms-2026-09-26-v2','disclosureVersion':'commercial-2026-09-26-v1','privacyVersion':'privacy-2026-09-26-v1','bundleHash':'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1','adultConfirmed':True,'publicDisplayAllowed':False})
  def job(self,uid):
   self.player(uid);ref=self.db.document('reviewJobs/'+uid);ref.set({'uid':uid,'state':'requested','requestedAt':firestore.SERVER_TIMESTAMP});return ref
  def test_self_and_exposed_phrase_are_excluded(self):

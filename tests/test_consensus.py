@@ -67,4 +67,28 @@ class Consensus(unittest.TestCase):
  def test_technical_failure_and_quality_do_not_earn_rewards(self):
   self.record['technicalCheck']['passed']=False
   d=self.decide();self.assertEqual(d['status'],'quality_check_required');self.assertFalse(d['rewardReviewIds'])
+ def report(self,i,reason='not_signing'):
+  self.reviews[i].update(text='',quality='poor',reportReason=reason)
+ def test_three_spam_reports_reject_without_rewards(self):
+  for i in range(3):self.report(i)
+  d=self.decide();self.assertEqual(d['status'],'rejected');self.assertTrue(d['misconductConfirmed']);self.assertEqual(len(d['spamReportIds']),3);self.assertFalse(d['rewardReviewIds'])
+ def test_quality_and_mixed_reports_reject_without_strikes(self):
+  for i in range(3):self.report(i,'unusable_quality')
+  self.assertFalse(self.decide()['misconductConfirmed']);self.assertEqual(self.decide()['status'],'rejected')
+  self.report(0);self.report(1);self.assertFalse(self.decide()['misconductConfirmed'])
+ def test_one_flag_cannot_reject_and_four_meanings_win(self):
+  self.report(0)
+  self.assertEqual(self.decide()['status'],'needs_more_reviews')
+  self.assertEqual(self.decide(5)['status'],'approved')
+ def test_self_alias_and_test_reports_cannot_create_strikes(self):
+  for i in range(3):self.report(i)
+  for identity in [{'samePersonAs':'signer'},{'testOnly':True},{'samePersonAs':'r1'}]:
+   self.invites['r0']=identity;self.assertNotEqual(self.decide()['status'],'rejected')
+ def test_established_three_meaning_consensus_prevents_automatic_reversal(self):
+  for i in range(3):self.report(i)
+  self.record['consensus']={'agreementCount':3,'status':'adjudication_required'}
+  self.assertEqual(self.decide()['status'],'adjudication_required')
+ def test_report_and_translation_cannot_be_mixed(self):
+  for i in range(3):self.reviews[i]['reportReason']='not_signing'
+  self.assertEqual(self.decide()['independentReviews'],0)
 if __name__=='__main__':unittest.main()
