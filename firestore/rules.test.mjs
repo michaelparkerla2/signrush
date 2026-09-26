@@ -15,7 +15,7 @@ const profile=()=>({uid:'alice',createdAt:serverTimestamp(),updatedAt:serverTime
 async function create(d=db()){return setDoc(doc(d,'players/alice'),profile());}
 function consent(d,id,action='accepted',extra={}){
  const b=writeBatch(d);
- b.set(doc(d,`players/alice/consents/${id}`),{action,termsVersion:'terms-2026-09-26-v2',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1',uid:'alice',email:'synthetic@example.test',adultConfirmed:action==='accepted',publicDisplayAllowed:false,recordedAt:serverTimestamp(),...extra});
+ b.set(doc(d,`players/alice/consents/${id}`),{action,termsVersion:'terms-2026-09-26-v3',disclosureVersion:'commercial-2026-09-26-v2',privacyVersion:'privacy-2026-09-26-v2',bundleHash:'3cd7079cf5b9a988b9480309dee50f633061ef8235865e504b9d82b0a3b33fde',uid:'alice',email:'synthetic@example.test',adultConfirmed:action==='accepted',publicDisplayAllowed:false,recordedAt:serverTimestamp(),...extra});
  b.update(doc(d,'players/alice'),{lastConsentId:id,consentAccepted:action==='accepted',updatedAt:serverTimestamp()});
  return b.commit();
 }
@@ -40,8 +40,8 @@ test('accept and withdraw atomically with immutable history',async()=>{
 test('partial writes and mismatched snapshots are rejected',async()=>{
  const d=db();await create(d);
  await assertFails(updateDoc(doc(d,'players/alice'),{lastConsentId:'orphan',consentAccepted:true,updatedAt:serverTimestamp()}));
- await assertFails(setDoc(doc(d,'players/alice/consents/orphan'),{action:'accepted',termsVersion:'terms-2026-09-26-v2',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1',uid:'alice',email:'synthetic@example.test',adultConfirmed:true,publicDisplayAllowed:false,recordedAt:serverTimestamp()}));
- const b=writeBatch(d);b.set(doc(d,'players/alice/consents/mismatch'),{action:'withdrawn',termsVersion:'terms-2026-09-26-v2',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1',uid:'alice',email:'synthetic@example.test',adultConfirmed:false,publicDisplayAllowed:false,recordedAt:serverTimestamp()});
+ await assertFails(setDoc(doc(d,'players/alice/consents/orphan'),{action:'accepted',termsVersion:'terms-2026-09-26-v3',disclosureVersion:'commercial-2026-09-26-v2',privacyVersion:'privacy-2026-09-26-v2',bundleHash:'3cd7079cf5b9a988b9480309dee50f633061ef8235865e504b9d82b0a3b33fde',uid:'alice',email:'synthetic@example.test',adultConfirmed:true,publicDisplayAllowed:false,recordedAt:serverTimestamp()}));
+ const b=writeBatch(d);b.set(doc(d,'players/alice/consents/mismatch'),{action:'withdrawn',termsVersion:'terms-2026-09-26-v3',disclosureVersion:'commercial-2026-09-26-v2',privacyVersion:'privacy-2026-09-26-v2',bundleHash:'3cd7079cf5b9a988b9480309dee50f633061ef8235865e504b9d82b0a3b33fde',uid:'alice',email:'synthetic@example.test',adultConfirmed:false,publicDisplayAllowed:false,recordedAt:serverTimestamp()});
  b.update(doc(d,'players/alice'),{lastConsentId:'mismatch',consentAccepted:true,updatedAt:serverTimestamp()});await assertFails(b.commit());
 });
 test('old versions, client times and event replay are rejected',async()=>{
@@ -154,7 +154,7 @@ test('public Google registration needs no invite but consent and isolation still
  await assertFails(getDoc(doc(d,'players/alice')));
  await assertFails(setDoc(doc(d,'signingJobs/new-player'),{uid:'new-player',state:'requested',requestedAt:serverTimestamp()}));
  const b=writeBatch(d);
- b.set(doc(d,'players/new-player/consents/join'),{action:'accepted',termsVersion:'terms-2026-09-26-v2',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1',uid:'new-player',email:'synthetic@example.test',adultConfirmed:true,publicDisplayAllowed:false,recordedAt:serverTimestamp()});
+ b.set(doc(d,'players/new-player/consents/join'),{action:'accepted',termsVersion:'terms-2026-09-26-v3',disclosureVersion:'commercial-2026-09-26-v2',privacyVersion:'privacy-2026-09-26-v2',bundleHash:'3cd7079cf5b9a988b9480309dee50f633061ef8235865e504b9d82b0a3b33fde',uid:'new-player',email:'synthetic@example.test',adultConfirmed:true,publicDisplayAllowed:false,recordedAt:serverTimestamp()});
  b.update(ref,{consentAccepted:true,lastConsentId:'join',updatedAt:serverTimestamp()});
  await assertSucceeds(b.commit());
  for(const kind of ['signingJobs','reviewJobs'])await assertSucceeds(setDoc(doc(d,kind,'new-player'),{uid:'new-player',state:'requested',requestedAt:serverTimestamp()}));
@@ -205,7 +205,7 @@ test('withdrawal atomically removes a public leaderboard entry',async()=>{
  const d=db();await create(d);await consent(d,'one');
  const join=writeBatch(d);join.set(doc(d,'gameProfiles/alice'),{alias:'Tester',avatar:'nova',listed:true,updatedAt:serverTimestamp()});join.set(doc(d,'leaderboard/alice'),{alias:'Tester',avatar:'nova',points:0,updatedAt:serverTimestamp()});await join.commit();
  await assertFails(consent(d,'two','withdrawn'));
- const b=writeBatch(d);b.set(doc(d,'players/alice/consents/two'),{action:'withdrawn',termsVersion:'terms-2026-09-26-v2',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1',uid:'alice',email:'synthetic@example.test',adultConfirmed:false,publicDisplayAllowed:false,recordedAt:serverTimestamp()});b.update(doc(d,'players/alice'),{lastConsentId:'two',consentAccepted:false,updatedAt:serverTimestamp()});b.delete(doc(d,'leaderboard/alice'));b.delete(doc(d,'gameProfiles/alice'));await assertSucceeds(b.commit());
+ const b=writeBatch(d);b.set(doc(d,'players/alice/consents/two'),{action:'withdrawn',termsVersion:'terms-2026-09-26-v3',disclosureVersion:'commercial-2026-09-26-v2',privacyVersion:'privacy-2026-09-26-v2',bundleHash:'3cd7079cf5b9a988b9480309dee50f633061ef8235865e504b9d82b0a3b33fde',uid:'alice',email:'synthetic@example.test',adultConfirmed:false,publicDisplayAllowed:false,recordedAt:serverTimestamp()});b.update(doc(d,'players/alice'),{lastConsentId:'two',consentAccepted:false,updatedAt:serverTimestamp()});b.delete(doc(d,'leaderboard/alice'));b.delete(doc(d,'gameProfiles/alice'));await assertSucceeds(b.commit());
  await assertFails(setDoc(doc(d,'leaderboard/alice'),{alias:'Tester',avatar:'nova',points:0,updatedAt:serverTimestamp()}));
 });
 
@@ -237,6 +237,11 @@ test('one agreement stores current evidence and optional private background atom
  assert.equal((await getDoc(doc(db(),'contributorProfiles/alice'))).data().aslRole,'translator');
  await assertFails(getDoc(doc(db('bob'),'contributorProfiles/alice')));
  await assertFails(updateDoc(doc(db(),`players/alice/consents/${profile.lastConsentId}`),{adultConfirmed:false}));
+ const stopped=await transport('/v1/consent',{method:'POST',body:JSON.stringify({...payload,accept:false})});assert.equal(stopped.ok,true);
+ assert.equal((await getDoc(doc(db(),'players/alice'))).data().consentAccepted,false);
+ assert.deepEqual((await getDoc(doc(db(),`players/alice/consents/${profile.lastConsentId}`))).data(),receipt);
+ await assertFails(setDoc(doc(db(),'signingJobs/alice'),{state:'requested',requestedAt:serverTimestamp()}));
+
 });
 test('old consent, forged release and missing adulthood cannot unlock participation',async()=>{
  const d=db();await create(d);

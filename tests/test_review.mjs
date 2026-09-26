@@ -23,7 +23,7 @@ test('quality must be selected before submitting and owner tests show no reward'
  const {review,next,calls,els}=fixture();next({state:'assigned',playbackURL:'invalid'});
  review.el('review-answer').value='Meaning';await review.submit();assert.equal(calls.length,0);
  next({state:'pending',outcome:{status:'test_only',independentReviews:0}});
- assert.equal(els.get('#review-outcome').textContent,'Test review saved');assert.match(els.get('#review-progress').textContent,/earns no points/);
+ assert.equal(els.get('#review-outcome').textContent,'Non-qualifying review saved');assert.match(els.get('#review-progress').textContent,/earns no points/);
 });
 
 test('known empty queue answers immediately without creating an assignment request',async()=>{const {review,calls,els}=fixture();review.service.availability=async()=>false;await review.request();assert.deepEqual(calls,[]);assert.equal(review.job.state,'empty');assert.equal(els.get('#review-loading').hidden,true);});

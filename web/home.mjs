@@ -19,7 +19,7 @@ export class Home {
  async share(){
   if(!navigator.share)return this.copyLink();
   const epoch=this.epoch;
-  try{await navigator.share({title:'SignRush',text:'Take a peek at SignRush, an ASL game in an open pilot.',url:'https://signrush-login.web.app/'});if(epoch===this.epoch)this.el('share-status').textContent='Thanks for spreading the word!';}
+  try{await navigator.share({title:'SignRush',text:'Take a peek at SignRush, an ASL game in the SignRush community.',url:'https://signrush-login.web.app/'});if(epoch===this.epoch)this.el('share-status').textContent='Thanks for spreading the word!';}
   catch(error){if(error.name!=='AbortError'&&epoch===this.epoch)this.el('share-status').textContent='Sharing could not open. Try Copy link below.';}
  }
  connect(service){
@@ -39,10 +39,10 @@ export class Home {
   this.stops.push(service.points(points=>{
    if(epoch!==this.epoch)return;const p=progress(points);
    this.el('home-points').textContent=String(p.points);this.el('wallet-test-points').textContent=String(p.points);this.el('star-progress').value=p.value;
-   this.el('star-progress').setAttribute('aria-label',`${p.remaining} test points to your next star`);
+   this.el('star-progress').setAttribute('aria-label',`${p.remaining} points to your next star`);
    this.el('milestone-label').textContent=`${p.remaining} points to ${p.points>=25?'your next':'your first'} star`;
    this.el('earned-stars').textContent=`${Math.floor(p.points/25)} stars collected`;
-   if(this.previous!==null&&p.points>this.previous){this.el('home-message').textContent=`Hooray! +${p.points-this.previous} test points. Your effort is adding up!`;this.root.classList.remove('celebrate');void this.root.offsetWidth;this.root.classList.add('celebrate');}
+   if(this.previous!==null&&p.points>this.previous){this.el('home-message').textContent=`Hooray! +${p.points-this.previous} points. Your effort is adding up!`;this.root.classList.remove('celebrate');void this.root.offsetWidth;this.root.classList.add('celebrate');}
    this.previous=p.points;
   },()=>{if(epoch===this.epoch){this.el('home-points').textContent='—';this.el('wallet-test-points').textContent='Unavailable';}}));
  }

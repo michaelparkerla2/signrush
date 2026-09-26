@@ -1,20 +1,20 @@
 {
-  "termsVersion": "terms-2026-09-26-v2",
-  "disclosureVersion": "commercial-2026-09-26-v1",
-  "privacyVersion": "privacy-2026-09-26-v1",
+  "termsVersion": "terms-2026-09-26-v3",
+  "disclosureVersion": "commercial-2026-09-26-v2",
+  "privacyVersion": "privacy-2026-09-26-v2",
   "documents": {
     "terms": {
       "path": "/legal/terms.html",
-      "sha256": "300bc51c98f3f48b9e6306c8eb629ac5586c82d52ada1297f7423c1d5b03f923"
+      "sha256": "96382a1fb202ae7d2c7c19e2385a70d930c3e1a7d2039046eb92facbbcd79c44"
     },
     "contributor-license": {
       "path": "/legal/contributor-license.html",
-      "sha256": "46211517a1190f4d6dcd011510f6097e7987653d9a77b245c5813bd1ccfcbaf4"
+      "sha256": "f4a9b7f7f37255af0b5941a52aa67c1f733fc9e6a966417a119f09cd0bd665a6"
     },
     "privacy": {
       "path": "/legal/privacy.html",
-      "sha256": "8fcbc5e86ef774646e512846a4be28598d18b5f9cfc9970755d4b13df127fe18"
+      "sha256": "7afdf4cbe4c3799180e5a3a244d621482d15cbeae31e2235d87bb9495779a0c9"
     }
   },
-  "bundleHash": "e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1"
+  "bundleHash": "3cd7079cf5b9a988b9480309dee50f633061ef8235865e504b9d82b0a3b33fde"
 }

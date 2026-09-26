@@ -25,3 +25,9 @@ Account includes a private request form for access, correction, deletion or rest
 Local development and GitHub only. maintainer must deploy the browser assets, Firestore Rules and Python workers together; new receipts fail closed against old Rules, and old workers cannot accept new versions. The separate FastAPI/reference transport is not the active site enrollment path and remains a legacy test reference, not an alternative commercial-consent endpoint. No new accounts or storage locations were introduced: all additions use the existing Firestore project and private media receipts.
 
 Rules/worker checks and emulator tests cover immutable evidence, current-version and age gates, private background, post-withdrawal request submission and independent consent provenance. The release does not implement public promotion permission, a minors flow, automatic biometric processing or a commercial dataset exporter.
+
+## September 26 interface and agreement update
+
+The active release is terms-2026-09-26-v3, commercial-2026-09-26-v2 and privacy-2026-09-26-v2. The preceding exact bundle is preserved in `web/legal/archive/terms-2026-09-26-v2/`. Player-facing pilot/test-points labels are removed; internal mode, accounting, media paths and export restrictions are unchanged. This copy update does not enable cash accounting or withdrawals.
+
+Account now offers **Stop contributing**. This uses the existing participation-stop transaction (historical internal action `withdrawn`): it disables further participation and removes public leaderboard/profile entries without altering or deleting the original accepted agreement. Existing licenses remain subject to applicable law and privacy requests remain available. No automatic historical-data deletion is claimed. Reacceptance is still required to resume, and cannot bypass moderation restrictions.

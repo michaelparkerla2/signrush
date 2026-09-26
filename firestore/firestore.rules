@@ -14,18 +14,18 @@ service cloud.firestore {
     && d.uid == uid && d.mode == 'test' && d.consentAccepted is bool;
   }
   function currentConsent(d) {
-   return d.termsVersion == 'terms-2026-09-26-v2'
-    && d.disclosureVersion == 'commercial-2026-09-26-v1'
-    && d.privacyVersion == 'privacy-2026-09-26-v1'
-    && d.bundleHash == 'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1'
+   return d.termsVersion == 'terms-2026-09-26-v3'
+    && d.disclosureVersion == 'commercial-2026-09-26-v2'
+    && d.privacyVersion == 'privacy-2026-09-26-v2'
+    && d.bundleHash == '3cd7079cf5b9a988b9480309dee50f633061ef8235865e504b9d82b0a3b33fde'
     && d.adultConfirmed == true && d.publicDisplayAllowed == false;
   }
   function eventShape(d) {
    return d.keys().hasAll(['action','termsVersion','disclosureVersion','privacyVersion','bundleHash','recordedAt','uid','email','adultConfirmed','publicDisplayAllowed'])
     && d.keys().hasOnly(['action','termsVersion','disclosureVersion','privacyVersion','bundleHash','recordedAt','uid','email','adultConfirmed','publicDisplayAllowed'])
     && d.action in ['accepted','withdrawn']
-    && d.termsVersion == 'terms-2026-09-26-v2' && d.disclosureVersion == 'commercial-2026-09-26-v1'
-    && d.privacyVersion == 'privacy-2026-09-26-v1' && d.bundleHash == 'e25ba7dff258e94847c427841c67c0d5425d712d8fb70063189ac493df1b6ff1'
+    && d.termsVersion == 'terms-2026-09-26-v3' && d.disclosureVersion == 'commercial-2026-09-26-v2'
+    && d.privacyVersion == 'privacy-2026-09-26-v2' && d.bundleHash == '3cd7079cf5b9a988b9480309dee50f633061ef8235865e504b9d82b0a3b33fde'
     && d.uid == request.auth.uid && d.email == request.auth.token.email
     && d.adultConfirmed == (d.action == 'accepted') && d.publicDisplayAllowed == false
     && d.recordedAt == request.time;

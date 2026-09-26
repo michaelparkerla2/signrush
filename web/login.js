@@ -90,13 +90,13 @@ const registration=new Onboarding(state=>{
  byId('agreement').hidden=!state.disclosure;
  byId('consent-form').hidden=phase!=='consent';
  byId('retry-registration').hidden=phase!=='unavailable';
- byId('withdraw').hidden=phase!=='ready';
+ byId('stop-contributing').hidden=phase!=='ready';
  byId('agree').checked=false;byId('save-consent').disabled=true;
  if(phase==='signed-out'){for(const id of ['asl-experience','hearing-identity','asl-role'])byId(id).value='unspecified';byId('privacy-request-text').value='';byId('privacy-request-status').textContent='';}
  byId('registration-status').textContent=state.message || ({
   loading:'Checking your player profile…',
-  consent:state.withdrawn?'Your agreement was withdrawn. Participation is paused.':'Welcome to SignRush! A little about you, then you’re ready to join.',
-  saving:state.accept?'Saving your agreement…':'Withdrawing your agreement…',
+  consent:state.withdrawn?'You have stopped contributing. Your recorded agreement remains on file.':'Welcome to SignRush! A little about you, then you’re ready to join.',
+  saving:state.accept?'Saving your agreement…':'Stopping contributions…',
   ready:''
  }[phase] || '');
  if(state.disclosure){
@@ -115,7 +115,7 @@ byId('account-toggle').addEventListener('click',()=>{
 byId('agree').addEventListener('change',()=>{byId('save-consent').disabled=!byId('agree').checked;});
 byId('consent-form').addEventListener('submit',event=>{event.preventDefault();if(byId('agree').checked)registration.consent(true,{aslExperience:byId('asl-experience').value,hearingIdentity:byId('hearing-identity').value,aslRole:byId('asl-role').value});});
 byId('retry-registration').addEventListener('click',()=>{if(currentUser)registration.start(currentUser);});
-byId('withdraw').addEventListener('click',()=>registration.consent(false));
+byId('stop-contributing').addEventListener('click',()=>registration.consent(false));
 const errors = {
  'auth/popup-blocked':'Your browser blocked the sign-in window. Allow popups for this page and try again.',
  'auth/popup-closed-by-user':'Sign-in was closed. You can try again whenever you’re ready.',
@@ -154,7 +154,7 @@ try {
    if(currentUser?.uid!==user.uid)return;
    const warning=snap.exists()?snap.data():null;
    byId('moderation-warning').hidden=!warning?.strikes;
-   byId('moderation-warning').textContent=warning?.blocked?'✕ ✕ ✕ Account cancelled: three confirmed spam/non-signing incidents. Your remaining test points are forfeited. Signing and validation are disabled. You can still submit a private account/privacy request.':warning?.strikes?`✕ Warning ${warning.strikes} of 3. You must submit real, meaningful ASL. Three independent reviewers reported spam or non-signing. Points from that video are revoked; a third confirmed incident forfeits all remaining test points and blocks signing and validation.`:'';
+   byId('moderation-warning').textContent=warning?.blocked?'✕ ✕ ✕ Account cancelled: three confirmed spam/non-signing incidents. Your remaining points are forfeited. Signing and validation are disabled. You can still submit a private account/privacy request.':warning?.strikes?`✕ Warning ${warning.strikes} of 3. You must submit real, meaningful ASL. Three independent reviewers reported spam or non-signing. Points from that video are revoked; a third confirmed incident forfeits all remaining points and blocks signing and validation.`:'';
    if(warning?.blocked){registration.reset();registration.user=user;registration.show({phase:'suspended',message:'Signing and validation are disabled after three confirmed incidents.'});}
   },()=>{byId('moderation-warning').hidden=true;});
   rewardContext=user?()=>firestoreSDK.onSnapshot(firestoreSDK.doc(firestoreSDK.getFirestore(app),'playerRewards',user.uid),s=>{if(currentUser?.uid===user.uid)byId('test-points').textContent=`${s.exists()?s.data().points:0} points`;},()=>{byId('test-points').textContent='Points unavailable';}):null;
@@ -167,7 +167,7 @@ try {
   if(user){
    document.querySelector('#identity').textContent=user.email || 'Signed-in player';
    document.querySelector('#uid').textContent=user.uid;
-   document.querySelector('#verified').textContent=user.emailVerified?'Email verified by Google.':'Email verification is still required before pilot access.';
+   document.querySelector('#verified').textContent=user.emailVerified?'Email verified by Google.':'Email verification is still required before participating.';
    registration.start(user);
   }else{
    registration.reset();
