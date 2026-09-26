@@ -1,3 +1,5 @@
+> Current review policy: [Meaning consensus v2](consensus-pilot.md) supersedes older three-matches and 0.85-threshold descriptions below: 3/3 initially, then 4/5, with unresolved meaning disputes held for fluent adjudication.
+
 # Daily-use corpus: 200 meanings, up to 20 approved people each
 
 This supersedes the 30-prompt / 300-reservation policy in DAILY_STARTER_V1.md.

@@ -1,3 +1,5 @@
+> Current review policy: [Meaning consensus v2](consensus-pilot.md) supersedes older three-matches and 0.85-threshold descriptions below: 3/3 initially, then 4/5, with unresolved meaning disputes held for fluent adjudication.
+
 # Daily-use starter batch v1
 
 The active backend catalog is `data/pilot-phrases.json`: exactly the owner's 30 meanings, `DAILY-001` through `DAILY-030`, version 1, category `daily_use`, batch `daily-use-v1`. The previous three prompts are archived in `data/legacy-phrases-v1.json`. Existing assignments keep their original prompt snapshot; no old recording, reference or exposure history is rewritten.

@@ -164,7 +164,8 @@ class ReviewWorker(Worker):
                     'status':'pending','mode':'test','quality':job.get('quality','not_sure')}
             tx.update(review_ref,{**answer,'exported':False})
             tx.update(record_ref,{'reviewResults':record.get('reviewResults',[])+[answer]})
-            tx.update(ref,{'state':'pending','playbackURL':self.fs.DELETE_FIELD})
+            tx.update(ref,{'state':'pending','playbackURL':self.fs.DELETE_FIELD,
+                           'referencePrompt':record.get('phrase',{}).get('text','')})
         commit(self.db.transaction())
 
     def export_answers(self):

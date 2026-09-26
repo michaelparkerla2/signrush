@@ -1,7 +1,7 @@
 import sys,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from consensus import decide,normalize
+from consensus import decide,normalize,assessment_binding
 class Consensus(unittest.TestCase):
  def setUp(self):
   self.record={'uid':'signer','phrase':{'text':'Please close the window.'},'technicalCheck':{'passed':True,'durationSec':12.7}}
@@ -28,7 +28,43 @@ class Consensus(unittest.TestCase):
   self.active['signer']=False;self.assertEqual(self.decide()['status'],'participation_paused')
  def test_quality_missing_or_poor_prevents_signer_reward(self):
   for quality in [None,'poor','not_sure']:
-   self.reviews[0]['quality']=quality;d=self.decide();self.assertEqual(d['signerPoints'],0);self.assertEqual(d['status'],'quality_check_required')
+   self.reviews[0]['quality']=quality;d=self.decide();self.assertEqual(d['signerPoints'],0);self.assertEqual(d['status'],'needs_more_reviews')
  def test_test_signer_no_rewards(self):
   self.invites['signer']={'testOnly':True};d=self.decide();self.assertEqual(d['status'],'test_only');self.assertFalse(d['rewardReviewIds'])
+ def assess(self,i,verdict='equivalent',resolved=True):
+  r=self.reviews[i]
+  self.record.setdefault('meaningAssessments',{})[r['reviewId']]={'binding':assessment_binding(self.record,r),'verdict':verdict,'criticalResolved':resolved,'assessor':'expert','reason':'Fluent review of meaning and critical details'}
+ def test_expanded_panel_needs_all_five_and_four_agreeing(self):
+  self.record['reviewLimit']=5
+  self.assertEqual(self.decide(3)['status'],'needs_more_reviews')
+  self.assertEqual(self.decide(4)['status'],'needs_more_reviews')
+  self.reviews[0]['text']='Unrelated response';self.assess(0,'unrelated')
+  d=self.decide(5);self.assertEqual(d['status'],'approved');self.assertEqual(d['agreementCount'],4)
+  self.assertEqual(d['threshold'],.8);self.assertEqual(d['independentReviews'],5)
+  self.assertEqual(d['suspectedOutlierReviewIds'],['0']);self.assertFalse(d['excludedReviews'])
+  self.assertNotIn('0',d['rewardReviewIds'])
+ def test_three_of_five_never_approves(self):
+  for i in [0,1]:self.reviews[i]['text']='Other meaning';self.assess(i,'different')
+  self.assertEqual(self.decide(5)['status'],'adjudication_required')
+ def test_four_matches_do_not_override_unresolved_critical_dissent(self):
+  self.reviews[0]['text']='Please do not close the window.'
+  self.assertEqual(self.decide(5)['status'],'adjudication_required')
+  self.assess(0,'different',False)
+  self.assertEqual(self.decide(5)['status'],'adjudication_required')
+  self.assess(0,'different',True)
+  self.assertEqual(self.decide(5)['status'],'approved')
+ def test_human_verified_paraphrase_and_stale_finding(self):
+  self.reviews[0]['text']='Shut the window, please.';self.assess(0)
+  self.assertEqual(self.decide()['status'],'approved')
+  self.reviews[0]['text']='Do not shut the window.'
+  self.assertEqual(self.decide()['status'],'needs_more_reviews')
+ def test_no_manufactured_consensus_after_excluding_review(self):
+  self.record['reviewLimit']=5;self.invites['r0']={'testOnly':True}
+  d=self.decide(5);self.assertEqual(d['status'],'adjudication_required');self.assertEqual(d['independentReviews'],4)
+ def test_exact_text_critical_finding_blocks(self):
+  self.assess(0,'equivalent',False)
+  self.assertEqual(self.decide(5)['status'],'adjudication_required')
+ def test_technical_failure_and_quality_do_not_earn_rewards(self):
+  self.record['technicalCheck']['passed']=False
+  d=self.decide();self.assertEqual(d['status'],'quality_check_required');self.assertFalse(d['rewardReviewIds'])
 if __name__=='__main__':unittest.main()

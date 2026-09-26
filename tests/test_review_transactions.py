@@ -45,6 +45,7 @@ class Reviews(unittest.TestCase):
   result=self.record.get().to_dict()['reviewResults'];self.assertEqual(len(result),1);self.assertEqual(result[0]['text'],'My independent meaning.')
   self.assertEqual(self.db.document('pilotReviews/'+job['reviewId']).get().to_dict()['status'],'pending')
   self.assertNotIn('phrase',ref.get().to_dict())
+  self.assertEqual(ref.get().to_dict()['referencePrompt'],PHRASES[0]['text'])
  def test_consent_checked_before_media_access(self):
   ref=self.job('reviewer');self.w.choose(ref);self.db.document('players/reviewer').update({'consentAccepted':False})
   with patch.object(self.w,'playback',side_effect=AssertionError('should not read media')):self.w.grant_review(ref)

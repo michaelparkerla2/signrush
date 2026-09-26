@@ -23,16 +23,15 @@ class Shadow(unittest.TestCase):
         r,rs,i,a=base();r['technicalCheck']['durationSec']=True
         self.assertIsNone(payload(r,rs,i,a)['input']['duration_seconds'])
     def test_timeout_and_bad_output_are_isolated(self):
-        r,rs,i,a=base();expected=decide(r,rs,i,a)
+        r,rs,i,a=base();expected={**decide(r,rs,i,a),'version':'exact-pilot-v1'}
         for effect in [subprocess.TimeoutExpired('runner',1),ValueError('invalid'),OSError('missing')]:
             with patch('rust_shadow.subprocess.run',side_effect=effect):
                 self.assertEqual(compare(r,rs,i,a,expected,executable='/synthetic/runner'),'unavailable')
         with patch('rust_shadow.subprocess.run',return_value=subprocess.CompletedProcess([],0,b'{}')):
             self.assertEqual(compare(r,rs,i,a,expected,executable='/synthetic/runner'),'mismatch')
-    def test_all_python_oracle_cases_through_real_runner(self):
-        self.assertTrue(BIN.exists(),'Build signrush-shadow before running this suite')
+    def test_new_policy_never_claims_parity_with_legacy_runner(self):
         for name,r,rs,i,a in cases:
-            with self.subTest(name=name):self.assertEqual(compare(r,rs,i,a,decide(r,rs,i,a),executable=str(BIN)),'match')
+            with self.subTest(name=name):self.assertEqual(compare(r,rs,i,a,decide(r,rs,i,a),executable=str(BIN)),'unsupported_policy')
     def test_runner_rejects_unknown_protocol_and_oversized_input_without_echo(self):
         for raw in [b'{"protocol":"bad"}',b'x'*262145]:
             out=subprocess.run([str(BIN)],input=raw,capture_output=True,timeout=2)

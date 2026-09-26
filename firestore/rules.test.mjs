@@ -206,3 +206,16 @@ test('withdrawal atomically removes a public leaderboard entry',async()=>{
  const b=writeBatch(d);b.set(doc(d,'players/alice/consents/two'),{action:'withdrawn',termsVersion:'pilot-v1',disclosureVersion:'training-v1',recordedAt:serverTimestamp()});b.update(doc(d,'players/alice'),{lastConsentId:'two',consentAccepted:false,updatedAt:serverTimestamp()});b.delete(doc(d,'leaderboard/alice'));b.delete(doc(d,'gameProfiles/alice'));await assertSucceeds(b.commit());
  await assertFails(setDoc(doc(d,'leaderboard/alice'),{alias:'Tester',avatar:'nova',points:0,updatedAt:serverTimestamp()}));
 });
+
+test('adjudication history stays private and revealed prompt cannot be used to rewrite a saved answer',async()=>{
+ const d=db();await create(d);await consent(d,'one');
+ await env.withSecurityRulesDisabled(async c=>{
+  await setDoc(doc(c.firestore(),'reviewJobs/alice'),{uid:'alice',state:'pending',text:'Original blind answer',referencePrompt:'Intended meaning'});
+  await setDoc(doc(c.firestore(),'meaningAssessmentHistory/finding'),{verdict:'unrelated'});
+ });
+ await assertSucceeds(getDoc(doc(d,'reviewJobs/alice')));
+ await assertFails(updateDoc(doc(d,'reviewJobs/alice'),{text:'Intended meaning'}));
+ await assertFails(updateDoc(doc(d,'reviewJobs/alice'),{referencePrompt:'Forged'}));
+ await assertFails(getDoc(doc(d,'meaningAssessmentHistory/finding')));
+ await assertFails(setDoc(doc(d,'meaningAssessmentHistory/forged'),{verdict:'equivalent'}));
+});

@@ -1,3 +1,5 @@
+> Current review policy: [Meaning consensus v2](consensus-pilot.md) supersedes older three-matches and 0.85-threshold descriptions below: 3/3 initially, then 4/5, with unresolved meaning disputes held for fluent adjudication.
+
 # SignRush developer handoff
 
 Updated 2026-09-23. Audience: UMI’s authorized developers, including Sam and maintainer. Read this before using older dated notes. This document distinguishes the live implementation from reference code and future plans.

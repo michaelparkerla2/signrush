@@ -20,7 +20,7 @@ class ConsensusWorker(ReviewWorker):
             active={u:self.consent(tx,u) for u in uids}
             decision=decide(record,reviews,invites,active)
             if record.get('corpusDisposition')=='rejected':
-                decision={**decision,'status':'rejected','signerPoints':0}
+                decision={**decision,'status':'rejected','signerPoints':0,'rewardReviewIds':[]}
             from corpus import counts, cap_for
             from google.cloud.firestore_v1.base_query import FieldFilter
             prompt=record.get('phrase',{}).get('id')
@@ -71,14 +71,14 @@ class ConsensusWorker(ReviewWorker):
                                'exportEligible':False,'consensusExported':False})
             if sj.get('assignmentId')==ref.id:
                 tx.update(signer_job,{'approvedSigners':after['approved'],'signerCap':cap_for(policy,prompt)})
-            summary={'status':decision['status'],'independentReviews':decision['independentReviews'],'requiredReviews':3}
+            summary={'status':decision['status'],'independentReviews':decision['independentReviews'],'requiredReviews':decision['reviewLimit']}
             if sj.get('assignmentId')==ref.id and sj.get('outcome')!=summary:tx.update(signer_job,{'outcome':summary})
             for job,j,r in jobs:
                 if r['reviewId'] in decision['excludedReviews']:status='test_only' if decision['excludedReviews'][r['reviewId']]=='owner_or_test_account' else 'ineligible'
                 elif r['reviewId'] in decision['rewardReviewIds']:status='approved'
                 elif decision['status'] in ('approved','adjudication_required','quality_check_required'):status='adjudication_required'
                 else:status='awaiting_reviews'
-                outcome={'status':status,'independentReviews':decision['independentReviews'],'requiredReviews':3}
+                outcome={'status':status,'independentReviews':decision['independentReviews'],'requiredReviews':decision['reviewLimit']}
                 if j.get('outcome')!=outcome:tx.update(job,{'outcome':outcome})
             for event,uid,role,points in ledger:
                 tx.create(event,{'uid':uid,'recordingId':ref.id,'role':role,'points':points,'mode':'test',

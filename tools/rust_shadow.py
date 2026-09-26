@@ -27,12 +27,14 @@ def payload(record,reviews,invites,active):
                     'normalized_text':normalize(r.get('text','')),'quality_good':r.get('quality')=='good'} for r in reviews]}
 
 def compare(record,reviews,invites,active,expected,*,executable=None,timeout=1.0):
-    """Return only disabled/match/mismatch/unavailable; fail open to Python.
+    """Return disabled/unsupported_policy/match/mismatch/unavailable; Python is authoritative.
 
     A failed shadow is not an approval. Python's original result remains authoritative.
     """
     executable=executable or os.environ.get('SIGNRUSH_RUST_SHADOW_BIN')
     if not executable:return 'disabled'
+    # v1 runner cannot represent expert findings or sticky 3/3 -> 4/5 panels.
+    if expected.get('version')!='exact-pilot-v1':return 'unsupported_policy'
     try:
         if not Path(executable).is_absolute():return 'unavailable'
         encoded=json.dumps(payload(record,reviews,invites,active),ensure_ascii=False,allow_nan=False).encode()

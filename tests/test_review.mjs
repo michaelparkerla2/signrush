@@ -40,3 +40,12 @@ test('stale, missing or future queue timestamps never block a fresh server reque
  assert.equal(freshEmptyQueue({...d,updatedAt:{toMillis:()=>90000}},100000),true);
  assert.equal(freshEmptyQueue({...d,reviewInProgress:true,updatedAt:{toMillis:()=>90000}},100000),false);
 });
+
+test('reference appears only after the blind answer is saved, with five-review progress',()=>{
+ const {next,els}=fixture();
+ next({state:'preparing',referencePrompt:'Hidden'});assert.equal(els.get('#review-reference').hidden,true);
+ next({state:'pending',referencePrompt:'Please wait.',outcome:{independentReviews:4,requiredReviews:5}});
+ assert.match(els.get('#review-reference').textContent,/Please wait/);assert.equal(els.get('#review-reference').hidden,false);
+ assert.match(els.get('#review-progress').textContent,/4 of 5/);
+ next({state:'requested'});assert.equal(els.get('#review-reference').textContent,'');
+});

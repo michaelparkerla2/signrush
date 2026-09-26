@@ -101,7 +101,9 @@ class Qualification(unittest.TestCase):
    answer={'uid':uid,'reviewId':'second-review'+str(i),'status':'pending','text':phrase['text'],'quality':'good'}
    self.db.document('pilotReviews/'+answer['reviewId']).set(answer);answers.append(answer)
   other.set({'uid':'second','assignmentId':other_id,'phrase':phrase,'status':'saved','technicalCheck':{'passed':True,'durationSec':2},'reviewResults':answers})
-  with ThreadPoolExecutor(max_workers=2) as pool:list(pool.map(self.w.qualify,[self.record,other]))
+  from transaction_retry import attempt
+  with ThreadPoolExecutor(max_workers=2) as pool:list(pool.map(lambda ref:attempt(self.w.qualify,ref),[self.record,other]))
+  for ref in [self.record,other]:self.w.qualify(ref)
   states=[r.get().to_dict()['consensus']['status'] for r in [self.record,other]]
   self.assertEqual(sorted(states),['approved','collection_full'])
   self.assertEqual(self.db.document('corpusCoverage/daily-use-v1').get().to_dict()[phrase['id']]['approved'],20)
@@ -112,4 +114,24 @@ class Qualification(unittest.TestCase):
   phrase=self.record.get().to_dict()['phrase']['id']
   self.assertEqual(self.db.document('corpusCoverage/daily-use-v1').get().to_dict()[phrase],{'approved':0,'pending':0})
   self.assertFalse(self.db.document('rewardEvents/'+self.rid+'-sign-signer').get().exists)
+ def test_expanded_panel_audited_outlier_and_idempotent_rewards(self):
+  import subprocess,sys
+  from pathlib import Path
+  refs=self.answers()
+  first=refs[0].get().to_dict()['reviewId'];original='A completely unrelated meaning.'
+  self.db.document('pilotReviews/'+first).update({'text':original})
+  self.w.qualify(self.record)
+  for i in [3,4]:
+   ref=self.job('r'+str(i));self.w.choose(ref)
+   ref.update({'state':'submitted','text':self.record.get().to_dict()['phrase']['text'],'quality':'good','submittedAt':firestore.SERVER_TIMESTAMP})
+   self.w.save_answer(ref);self.w.qualify(self.record)
+  self.assertEqual(self.record.get().to_dict()['consensus']['status'],'adjudication_required')
+  self.assertEqual(len(list(self.db.collection('rewardEvents').stream())),0)
+  subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/'tools/corpus_admin.py'),'--project',self.db.project,'assess-review',self.rid,first,'--verdict','unrelated','--critical-dispute','resolved','--assessor','synthetic-expert','--reason','Synthetic unrelated response; critical meaning reviewed'],check=True,capture_output=True)
+  self.w.qualify(self.record);self.w.qualify(self.record)
+  d=self.record.get().to_dict()['consensus'];self.assertEqual(d['status'],'approved');self.assertEqual(d['independentReviews'],5)
+  self.assertEqual(d['suspectedOutlierReviewIds'],[first]);self.assertEqual(len(list(self.db.collection('rewardEvents').stream())),5)
+  self.assertEqual(len(list(self.db.collection('meaningAssessmentHistory').stream())),1)
+  self.assertEqual(self.db.document('pilotReviews/'+first).get().to_dict()['text'],original)
+  self.assertEqual(refs[0].get().to_dict()['outcome']['requiredReviews'],5)
 if __name__=='__main__':unittest.main()

@@ -1,3 +1,5 @@
+> Current review policy: [Meaning consensus v2](consensus-pilot.md) supersedes older three-matches and 0.85-threshold descriptions below: 3/3 initially, then 4/5, with unresolved meaning disputes held for fluent adjudication.
+
 # SignRush database draft
 
 Status: target design. The first local PostgreSQL slice and ten synthetic integration tests are implemented; see `../README.md` for scope and limitations. No cloud database, app, scoring model, payment integration, or service-identity isolation has been deployed. Tables below describe the complete target, not a claim that every table is implemented.
