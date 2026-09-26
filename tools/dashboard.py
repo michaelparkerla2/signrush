@@ -23,4 +23,4 @@ def summary(uid,records,reviews,invites,activity,reserved,coverage=None,policy=N
         else:pending+=1
     return {'signAvailable':sum(p['id'] not in exposed and available((coverage or {}).get(p['id'],{}),cap_for(policy or {},p['id'])) for p in PHRASES),
             'reviewAvailable':len(review_available),'submitted':sum(r.get('status') in ('saved','failed') for r in own)+len(mine),
-            'pending':pending,'approved':approved,'testTasks':tests,'mode':'test','catalogBatch':BATCH}
+            'pending':pending,'approved':approved,'testTasks':tests,'mode':'test','catalogBatch':BATCH,'catalogSize':len(PHRASES)}

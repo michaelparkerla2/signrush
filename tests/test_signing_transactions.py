@@ -88,6 +88,18 @@ class Transactions(unittest.TestCase):
   self.assertEqual(len({r['phrase']['id'] for r in rows}),4)
   self.assertTrue(all(r['promptVersion']==1 and r['batch']=='daily-use-v1' and r['corpusSignerId']==r['uid'] for r in rows))
   self.assertEqual(sum(v['pending'] for v in self.db.document('corpusCoverage/daily-use-v1').get().to_dict().values()),4)
+ def test_last_of_all_200_phrases_is_assignable_with_full_rights_and_split(self):
+  from tools.signing_worker import PHRASES
+  self.assertEqual(len(PHRASES),200)
+  self.db.document('corpusCoverage/daily-use-v1').set({p['id']:{'approved':20,'pending':0} for p in PHRASES[:-1]})
+  # Old lifetime reservations must not impose the removed 300-task limit.
+  self.db.document('pilotLimits/daily-use-v1').set({'reserved':4000,'limit':300})
+  ref=self.player('last');self.w.assign(ref);job=ref.get().to_dict()
+  self.assertEqual(job['promptId'],'DAILY-200');self.assertEqual(job['signerCap'],20)
+  row=self.db.document('pilotRecordings/'+job['assignmentId']).get().to_dict()
+  self.assertEqual(row['rights']['consentPath'],'players/last/consents/one')
+  self.assertIn(row['corpusSplit'],['train','validation','test'])
+  self.assertEqual(row['corpusSignerId'],'last')
  def test_aliases_cannot_reserve_same_meaning_twice(self):
   ref=self.player('first');self.w.assign(ref);first=ref.get().to_dict()['promptId']
   second=self.player('second');self.db.document('pilotInvites/second').update({'samePersonAs':'first'})

@@ -78,7 +78,7 @@ test('signing requires current consent and only the player can read a job',async
  await assertFails(getDocs(collection(d,'signingJobs')));await assertFails(deleteDoc(ref));
  await assertFails(updateDoc(ref,{state:'assigned',prompt:'cheat'}));
 });
-test('a consented player can claim one catalog phrase and cannot invent the wording',async()=>{
+test('client-created assignments and coverage writes are denied even with valid catalog wording',async()=>{
  const d=db();await create(d);await consent(d,'join');
  const assignmentId='ab'.repeat(16);
  const instruction='Express this meaning naturally in ASL, as you would in an everyday conversation. You do not need to follow the English word order. Use your own natural signing style.';
@@ -90,9 +90,9 @@ test('a consented player can claim one catalog phrase and cannot invent the word
   tx.set(doc(d,'pilotLimits/daily-use-v1'),{reserved:1,limit:300,claimId:assignmentId});
  };
  await assertFails(runTransaction(d,async tx=>{tx.set(doc(d,'signingJobs/alice'),{uid:'alice',state:'assigned',requestedAt:serverTimestamp(),assignmentId,promptId:'DAILY-001',prompt:'Not the catalog wording.',promptVersion:1,signerInstruction:instruction,maxBytes:8388608,maxSeconds:30,batch:'daily-use-v1'});}));
- await assertSucceeds(runTransaction(d,async tx=>{claim(tx);}));
+ await assertFails(runTransaction(d,async tx=>{claim(tx);}));
  await assertFails(getDoc(doc(d,'pilotRecordings/'+assignmentId)));
- await assertSucceeds(getDoc(doc(d,'promptCoverage/daily-use-v1')));
+ await assertFails(getDoc(doc(d,'promptCoverage/daily-use-v1')));
  await assertFails(setDoc(doc(d,'promptCoverage/daily-use-v1'),{'DAILY-001':10,claimId:'cd'.repeat(16)}));
 });
 test('only bounded upload metadata can be added to a server assignment',async()=>{
@@ -119,7 +119,7 @@ test('review requests are private and cannot select a recording or reveal refere
  await assertSucceeds(getDoc(ref));await assertFails(getDoc(doc(db('bob'),'reviewJobs/alice')));
  await assertFails(getDocs(collection(d,'reviewJobs')));await assertFails(updateDoc(ref,{state:'assigned'}));
  for(const path of ['pilotReviews/secret','pilotRecordings/secret'])await assertFails(getDoc(doc(d,path)));
- await assertSucceeds(getDoc(doc(d,'pilotActivity/alice')));
+ await assertFails(getDoc(doc(d,'pilotActivity/alice')));
  await assertFails(getDoc(doc(db('bob'),'pilotActivity/alice')));
 });
 test('a review answer can be submitted once but cannot forge consensus or change the video',async()=>{
