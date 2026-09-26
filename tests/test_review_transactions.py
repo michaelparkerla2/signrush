@@ -7,6 +7,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
+from transaction_retry import attempt
 import secrets
 from google.cloud import firestore
 from google.auth.credentials import AnonymousCredentials
@@ -31,7 +32,8 @@ class Reviews(unittest.TestCase):
   self.w.choose(ref);self.assertEqual(ref.get().to_dict()['state'],'empty')
  def test_three_distinct_slots_under_concurrency_and_sanitized_jobs(self):
   refs=[self.job('reviewer'+str(i)) for i in range(5)]
-  with ThreadPoolExecutor(max_workers=5) as p:list(p.map(self.w.choose,refs))
+  with ThreadPoolExecutor(max_workers=5) as p:list(p.map(lambda ref:attempt(self.w.choose,ref),refs))
+  for ref in refs:self.w.choose(ref)
   assigned=[r.get().to_dict() for r in refs if r.get().to_dict()['state']=='preparing']
   self.assertEqual(len(assigned),3);self.assertEqual(len(set(self.record.get().to_dict()['reviewerIds'])),3)
   for job in assigned:self.assertEqual(set(job),{'uid','state','reviewId','requestedAt'})

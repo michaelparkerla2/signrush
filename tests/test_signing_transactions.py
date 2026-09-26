@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sys
 from unittest.mock import patch
+from transaction_retry import attempt
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from google.cloud import firestore
 from google.auth.credentials import AnonymousCredentials
@@ -31,12 +32,16 @@ class Transactions(unittest.TestCase):
   self.db.document('players/'+uid).set({'status':'active','mode':'test','consentAccepted':True,'lastConsentId':'one'})
   self.db.document('players/'+uid+'/consents/one').set({'action':'accepted','termsVersion':'pilot-v1','disclosureVersion':'training-v1'})
   ref=self.db.document('signingJobs/'+uid);ref.set({'uid':uid,'state':'requested','requestedAt':firestore.SERVER_TIMESTAMP});return ref
- def test_concurrent_reservations_are_globally_capped(self):
-  refs=[self.player('p'+str(i)) for i in range(6)]
-  with patch('tools.signing_worker.MAX_TASKS',3):
-   with ThreadPoolExecutor(max_workers=6) as pool:list(pool.map(self.w.assign,refs))
-  self.assertEqual(sum(r.get().to_dict()['state']=='assigned' for r in refs),3)
-  self.assertEqual(self.db.document('pilotLimits/daily-use-v1').get().to_dict()['reserved'],3)
+ def test_concurrent_reservations_are_capped_per_prompt(self):
+  from tools.signing_worker import PHRASES
+  for i in range(18):
+   self.db.document('pilotRecordings/existing'+str(i)).set({'uid':'old'+str(i),'assignmentId':'existing'+str(i),'phrase':PHRASES[0],'status':'saved','technicalCheck':{'passed':True},'consensus':{'status':'approved'}})
+  refs=[self.player('p'+str(i)) for i in range(4)]
+  with patch('tools.signing_worker.PHRASES',PHRASES[:1]):
+   with ThreadPoolExecutor(max_workers=4) as pool:list(pool.map(lambda ref:attempt(self.w.assign,ref),refs))
+   for ref in refs:self.w.assign(ref)
+  self.assertEqual(sum(r.get().to_dict()['state']=='assigned' for r in refs),2)
+  self.assertEqual(self.db.document('corpusCoverage/daily-use-v1').get().to_dict()['DAILY-001'],{'approved':18,'pending':2})
  def test_withdrawn_player_is_blocked_server_side(self):
   ref=self.player('p');self.db.document('players/p').update({'consentAccepted':False});self.w.assign(ref)
   self.assertEqual(ref.get().to_dict()['state'],'blocked')
@@ -79,15 +84,56 @@ class Transactions(unittest.TestCase):
   rows=[x.to_dict() for x in self.db.collection('pilotRecordings').stream()]
   self.assertEqual(len({r['phrase']['id'] for r in rows}),4)
   self.assertTrue(all(r['promptVersion']==1 and r['batch']=='daily-use-v1' and r['corpusSignerId']==r['uid'] for r in rows))
-  self.assertEqual(sum(self.db.document('promptCoverage/daily-use-v1').get().to_dict().values()),4)
+  self.assertEqual(sum(v['pending'] for v in self.db.document('corpusCoverage/daily-use-v1').get().to_dict().values()),4)
  def test_aliases_cannot_reserve_same_meaning_twice(self):
   ref=self.player('first');self.w.assign(ref);first=ref.get().to_dict()['promptId']
   second=self.player('second');self.db.document('pilotInvites/second').update({'samePersonAs':'first'})
   self.w.assign(second);self.assertNotEqual(second.get().to_dict()['promptId'],first)
  def test_filled_batch_returns_blocked_without_increment(self):
   from tools.signing_worker import PHRASES
-  self.db.document('promptCoverage/daily-use-v1').set({p['id']:10 for p in PHRASES})
+  self.db.document('corpusCoverage/daily-use-v1').set({p['id']:{'approved':20,'pending':0} for p in PHRASES})
   ref=self.player('p');self.w.assign(ref)
   self.assertEqual(ref.get().to_dict()['state'],'blocked')
   self.assertFalse(self.db.document('pilotLimits/daily-use-v1').get().exists)
+ def test_failed_clip_releases_capacity_but_never_repeats_for_signer(self):
+  from tools.signing_worker import PHRASES
+  with patch('tools.signing_worker.PHRASES',PHRASES[:1]):
+   ref=self.player('p');self.w.assign(ref)
+   rid=ref.get().to_dict()['assignmentId']
+   self.db.document('pilotRecordings/'+rid).update({'status':'failed'})
+   self.w.refresh_coverage()
+   ref.set({'uid':'p','state':'requested'});self.w.assign(ref)
+   self.assertEqual(ref.get().to_dict()['state'],'blocked')
+   other=self.player('other');self.w.assign(other)
+   self.assertEqual(other.get().to_dict()['state'],'assigned')
+ def test_reopen_to_thirty_and_persistent_signer_split(self):
+  from tools.signing_worker import PHRASES
+  for i in range(20):
+   self.db.document('pilotRecordings/old'+str(i)).set({'uid':'old'+str(i),'assignmentId':'old'+str(i),'phrase':PHRASES[0],'status':'saved','technicalCheck':{'passed':True},'consensus':{'status':'approved'}})
+  self.w.refresh_coverage()
+  with patch('tools.signing_worker.PHRASES',PHRASES[:1]):
+   ref=self.player('new');self.w.assign(ref);self.assertEqual(ref.get().to_dict()['state'],'blocked')
+   self.db.document('corpusPolicy/daily-use-v1').set({'caps':{'DAILY-001':30}})
+   ref.set({'uid':'new','state':'requested'});self.w.assign(ref)
+   self.assertEqual(ref.get().to_dict()['state'],'assigned')
+   first=self.db.document('pilotRecordings/'+ref.get().to_dict()['assignmentId']).get().to_dict()
+  ref.set({'uid':'new','state':'requested'});self.w.assign(ref)
+  second=self.db.document('pilotRecordings/'+ref.get().to_dict()['assignmentId']).get().to_dict()
+  self.assertEqual(first['corpusSplit'],second['corpusSplit'])
+ def test_actual_database_overrides_stale_empty_coverage(self):
+  from tools.signing_worker import PHRASES
+  for i in range(20):
+   self.db.document('pilotRecordings/full'+str(i)).set({'uid':'full'+str(i),'phrase':PHRASES[0],'status':'saved','technicalCheck':{'passed':True},'consensus':{'status':'approved'}})
+  with patch('tools.signing_worker.PHRASES',PHRASES[:1]):
+   ref=self.player('new');self.w.assign(ref);self.w.assign(ref)
+  self.assertEqual(ref.get().to_dict()['state'],'blocked')
+ def test_linked_evaluation_identity_cannot_move_to_training(self):
+  self.player('first');ref=self.player('alias')
+  self.db.document('pilotInvites/alias').update({'samePersonAs':'first'})
+  self.db.document('corpusSigners/first').set({'split':'train'})
+  self.db.document('corpusSigners/alias').set({'split':'test'})
+  self.w.assign(ref)
+  row=self.db.document('pilotRecordings/'+ref.get().to_dict()['assignmentId']).get().to_dict()
+  self.assertEqual(row['corpusSplit'],'quarantine')
+  self.assertEqual(self.db.document('corpusSigners/first').get().to_dict()['split'],'quarantine')
 if __name__=='__main__':unittest.main()

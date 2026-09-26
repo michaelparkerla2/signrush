@@ -24,7 +24,7 @@ def can_review(record, uid, exposed):
             and record.get('phrase', {}).get('id') not in exposed
             and record.get('technicalCheck', {}).get('passed') is True
             and uid not in record.get('reviewerIds', [])
-            and record.get('consensus',{}).get('status') not in ('approved','adjudication_required','quality_check_required','test_only')
+            and record.get('consensus',{}).get('status') not in ('approved','adjudication_required','quality_check_required','test_only','rejected','collection_full')
             and len(record.get('reviewerIds', [])) < min(5,record.get('reviewLimit',REVIEW_LIMIT)))
 
 
@@ -35,8 +35,8 @@ class ReviewWorker(Worker):
 
     def choose(self, ref):
         from google.cloud.firestore_v1.base_query import FieldFilter
-        # The collection is bounded by the bounded batch reservation cap.
-        candidates=list(self.db.collection('pilotRecordings').where(filter=FieldFilter('status','==','saved')).limit(MAX_RECORDINGS).stream())
+        # Failed attempts do not consume approved capacity; never truncate history.
+        candidates=list(self.db.collection('pilotRecordings').where(filter=FieldFilter('status','==','saved')).stream())
         secrets.SystemRandom().shuffle(candidates)
         @self.fs.transactional
         def commit(tx):

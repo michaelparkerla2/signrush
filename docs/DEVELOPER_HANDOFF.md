@@ -190,3 +190,7 @@ See [the reliability/readiness report](RELIABILITY_READINESS.md) for the existin
 ## Daily-use starter batch (2026-09-25)
 
 [Daily starter v1](DAILY_STARTER_V1.md) supersedes the earlier three-recording launch limit for new assignments. The 30 stable meanings have a separate 300-reservation batch budget and balanced, linked-person-aware assignment. Legacy records remain intact. Consult this document before changing counters, prompt IDs, review exposure or dataset split policy.
+
+## 200 daily meanings / approved-person cap
+
+See [CORPUS_200.md](CORPUS_200.md). This supersedes the 30-prompt, 10-reservation-per-phrase policy: DAILY-001–200, 20 approved distinct people per meaning, separate pending slots, no repeats, preserved independent review, fixed signer cohorts, and private operator controls for 30-person reopening. Delivery is local code + GitHub only; maintainer owns hosting/deployment.

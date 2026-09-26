@@ -16,10 +16,10 @@ import time
 from datetime import datetime, timezone
 
 MAX_BYTES = 8 * 1024 * 1024
-MAX_TASKS = 300
-MAX_RECORDINGS = 303  # Existing 3 legacy reservations plus this bounded batch
+MAX_TASKS = 4000
+MAX_RECORDINGS = 4003  # Work-page bound, never used to truncate corpus accounting
 BATCH = 'daily-use-v1'
-TARGET_SIGNERS = 10
+TARGET_SIGNERS = 20
 PROJECT = 'signrush-login'
 RAW = 'umi-signrush-raw'
 HELDOUT = 'umi-signrush-heldout-answers'
@@ -96,6 +96,19 @@ class Worker:
                 person=linked
         return values
 
+    def signer_cohort(self,tx,person,identities):
+        from consensus import person_key
+        from corpus import split_for
+        values=set()
+        for uid in {person,*identities}:
+            if person_key(uid,identities)!=person:continue
+            profile=self.db.document('corpusSigners/'+uid).get(transaction=tx).to_dict() or {}
+            if profile.get('split'):values.add(profile['split'])
+        if not values:return {'split':split_for(person)}
+        if not values.issubset({'train','validation','test','quarantine'}):raise ValueError('Invalid signer split')
+        # Linking people from different cohorts can never move evaluation into training.
+        return {'split':next(iter(values)) if len(values)==1 else 'quarantine'}
+
     def assign(self,ref):
         rid=secrets.token_hex(16)
         @self.fs.transactional
@@ -108,28 +121,45 @@ class Worker:
             activity=activity_ref.get(transaction=tx).to_dict() or {}
             # Canonical linked identity: one reservation per meaning per known person.
             from consensus import person_key
-            person=person_key(uid,self.identities(tx,[uid]))
-            coverage_ref=self.db.document('promptCoverage/'+BATCH)
+            identity_chain=self.identities(tx,[uid])
+            person=person_key(uid,identity_chain)
+            from corpus import counts, available, cap_for
+            from google.cloud.firestore_v1.base_query import FieldFilter
+            coverage_ref=self.db.document('corpusCoverage/'+BATCH)
             coverage=coverage_ref.get(transaction=tx).to_dict() or {}
+            policy=self.db.document('corpusPolicy/'+BATCH).get(transaction=tx).to_dict() or {}
             person_ref=self.db.document('promptParticipants/'+person)
             history=person_ref.get(transaction=tx).to_dict() or {}
+            signer_ref=self.db.document('corpusSigners/'+person)
+            signer=self.signer_cohort(tx,person,identity_chain)
             exposed=set(activity.get('reviewedPhraseIds',[]))|set(activity.get('signingPhraseIds',[]))|set(history.get('meaningIds',[]))
-            options=[p for p in PHRASES if p['id'] not in exposed and coverage.get(p['id'],0)<TARGET_SIGNERS]
+            options=[p for p in PHRASES if p['id'] not in exposed and available(coverage.get(p['id'],{}),cap_for(policy,p['id']))]
             counter=self.db.document('pilotLimits/'+BATCH)
             count=(counter.get(transaction=tx).to_dict() or {}).get('reserved',0)
-            if not ok or count>=MAX_TASKS or not options:
+            if not ok or not options:
                 tx.update(ref,{'state':'blocked'});return
-            lowest=min(coverage.get(p['id'],0) for p in options)
-            phrase=secrets.choice([p for p in options if coverage.get(p['id'],0)==lowest])
-            tx.set(coverage_ref,{**coverage,phrase['id']:coverage.get(phrase['id'],0)+1})
+            rank=lambda p:(coverage.get(p['id'],{}).get('approved',0),coverage.get(p['id'],{}).get('pending',0))
+            lowest=min(map(rank,options))
+            phrase=secrets.choice([p for p in options if rank(p)==lowest])
+            rows=[x.to_dict() for x in self.db.collection('pilotRecordings').where(filter=FieldFilter('phrase.id','==',phrase['id'])).stream(transaction=tx)]
+            identities=self.identities(tx,[r['uid'] for r in rows]+[uid])
+            actual=counts(rows,identities)
+            # Authoritative query + shared transaction lock prevent concurrent overbooking.
+            if not available(actual,cap_for(policy,phrase['id'])):
+                tx.set(coverage_ref,{**coverage,phrase['id']:actual});return
+            if any(person_key(r['uid'],identities)==person for r in rows):
+                tx.set(person_ref,{'meaningIds':list(set(history.get('meaningIds',[]))|{phrase['id']})});return
+            tx.set(coverage_ref,{**coverage,phrase['id']:{**actual,'pending':actual['pending']+1}})
+            tx.set(signer_ref,signer)
             tx.set(person_ref,{'meaningIds':list(set(history.get('meaningIds',[]))|{phrase['id']})})
             tx.set(activity_ref,{**activity,'signingPhraseIds':list(set(activity.get('signingPhraseIds',[])+[phrase['id']]))})
             record={'uid':uid,'assignmentId':rid,'phrase':phrase,'status':'assigned',
                     'createdAt':self.fs.SERVER_TIMESTAMP,'consentVersion':'training-v1','mode':'test',
-                    'promptVersion':phrase['version'],'batch':BATCH,'corpusSignerId':person}
+                    'promptVersion':phrase['version'],'batch':BATCH,'corpusSignerId':person,'corpusSplit':signer['split']}
             tx.create(self.db.document('pilotRecordings/'+rid),record)
-            tx.set(counter,{'reserved':count+1,'limit':MAX_TASKS})
+            tx.set(counter,{'reserved':count+1,'acceptedTarget':MAX_TASKS})
             tx.update(ref,{'state':'assigned','assignmentId':rid,'promptId':phrase['id'],
+                           'approvedSigners':actual['approved'],'signerCap':cap_for(policy,phrase['id']),
                            'prompt':phrase['text'],'promptVersion':phrase['version'],'signerInstruction':phrase['signerInstruction'],'maxBytes':MAX_BYTES,'maxSeconds':30})
         commit(self.db.transaction())
 
@@ -217,7 +247,7 @@ class Worker:
         receipt={'assignmentId':job['assignmentId'],'uid':job['uid'],'status':state,'bucket':RAW,
             'objectKey':source_key,'generation':str(generation),'sourceSha256':digest,'size':len(payload),
             'phraseId':record['phrase']['id'],'promptVersion':record['phrase'].get('version',1),
-            'batch':record.get('batch','legacy-v1'),'corpusSignerId':record.get('corpusSignerId',record['uid']),'technicalCheck':quality,'reviewResults':[],
+            'corpusSplit':record.get('corpusSplit','quarantine'),'batch':record.get('batch','legacy-v1'),'corpusSignerId':record.get('corpusSignerId',record['uid']),'technicalCheck':quality,'reviewResults':[],
             'translation':None,'mode':'test','exportEligible':False}
         answer={'assignmentId':job['assignmentId'],'originalPrompt':record['phrase'],
                 'consentVersion':record['consentVersion'],'referenceStatus':'unvalidated_prompt'}
@@ -236,7 +266,24 @@ class Worker:
         except PreconditionFailed:
             if json.loads(blob.download_as_bytes(timeout=15))!=data:raise ValueError('conflicting receipt')
 
+    def refresh_coverage(self):
+        """Reconcile cached scheduling counts from ALL actual records (including legacy)."""
+        from corpus import counts
+        records=[x.to_dict() for x in self.db.collection('pilotRecordings').stream()]
+        identities=self.identities(None,{r['uid'] for r in records})
+        grouped={p['id']:[] for p in PHRASES}
+        for r in records:
+            key=r.get('phrase',{}).get('id')
+            if key in grouped:grouped[key].append(r)
+        value={key:counts(rows,identities) for key,rows in grouped.items()}
+        ref=self.db.document('corpusCoverage/'+BATCH)
+        # This is a scheduling cache only: assignment/approval recheck actual rows
+        # transactionally. Stale reconciliation can never authorize an excess clip.
+        if (ref.get().to_dict() or {})!=value:ref.set(value)
+
     def tick(self):
+        if time.monotonic()-getattr(self,'_coverage_at',0)>60:
+            self.refresh_coverage();self._coverage_at=time.monotonic()
         from google.cloud.firestore_v1.base_query import FieldFilter
         jobs=self.db.collection('signingJobs').where(filter=FieldFilter('state','in',
             ['requested','upload_requested','granting','uploading','submitted'])).limit(MAX_RECORDINGS).stream()

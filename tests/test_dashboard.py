@@ -7,8 +7,8 @@ class Dashboard(unittest.TestCase):
   records=[{'assignmentId':'a','uid':'me','status':'saved','phrase':{'id':'one'},'consensus':{}},
            {'assignmentId':'b','uid':'other','status':'saved','phrase':{'id':'one'},'technicalCheck':{'passed':True}}]
   d=summary('me',records,[],{}, {},299)
-  self.assertEqual(d['submitted'],1);self.assertEqual(d['pending'],1);self.assertEqual(d['reviewAvailable'],0);self.assertEqual(d['signAvailable'],1)
+  self.assertEqual(d['submitted'],1);self.assertEqual(d['pending'],1);self.assertEqual(d['reviewAvailable'],0);self.assertEqual(d['signAvailable'],200)
   self.assertNotIn('phrase',str(d));self.assertNotIn('uid',d)
- def test_full_storage_reservations_show_no_signing_tasks(self):
-  self.assertEqual(summary('me',[],[],{}, {},300)['signAvailable'],0)
+ def test_historical_reservations_do_not_consume_approved_capacity(self):
+  self.assertEqual(summary('me',[],[],{}, {},4000)['signAvailable'],200)
 if __name__=='__main__':unittest.main()

@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/rules-unit-testing';
 import {doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,query,limit,orderBy,writeBatch,serverTimestamp,Timestamp} from 'firebase/firestore';
 let env;
-before(async()=>{env=await initializeTestEnvironment({projectId:'demo-signrush-rules',firestore:{host:'127.0.0.1',port:8180,rules:await readFile('firestore.rules','utf8')}});});
+before(async()=>{env=await initializeTestEnvironment({projectId:'demo-signrush-rules',firestore:{host:'127.0.0.1',port:8180,rules:await readFile(new URL('./firestore.rules',import.meta.url),'utf8')}});});
 after(async()=>env?.cleanup());
 beforeEach(async()=>{await env.clearFirestore();await env.withSecurityRulesDisabled(async c=>{
  for(const uid of ['alice','bob'])await setDoc(doc(c.firestore(),'pilotInvites',uid),{active:true});
@@ -90,7 +90,7 @@ test('upload completion cannot approve quality or earn rewards and withdrawal bl
  await assertFails(updateDoc(ref,{state:'saved',points:30}));await assertSucceeds(updateDoc(ref,{state:'submitted'}));
  await consent(d,'withdraw','withdrawn');await assertFails(getDoc(ref));
  await assertFails(updateDoc(ref,{state:'requested'}));
- for(const path of ['pilotRecordings/test','pilotLimits/signing-v1'])await assertFails(getDoc(doc(d,path)));
+ for(const path of ['pilotRecordings/test','pilotLimits/signing-v1','corpusCoverage/daily-use-v1','corpusPolicy/daily-use-v1','corpusSigners/alice'])await assertFails(getDoc(doc(d,path)));
 });
 
 test('review requests are private and cannot select a recording or reveal references',async()=>{

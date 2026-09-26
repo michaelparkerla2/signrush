@@ -87,4 +87,29 @@ class Qualification(unittest.TestCase):
    self.w.qualify(self.record)
   self.assertEqual(self.record.get().to_dict()['consensus']['status'],'approved')
   self.assertEqual(self.db.document('playerRewards/signer').get().to_dict()['points'],12)
+ def test_concurrent_last_approval_slot_is_not_overfilled(self):
+  from secrets import token_hex
+  self.answers()
+  phrase=self.record.get().to_dict()['phrase']
+  for i in range(19):
+   self.db.document('pilotRecordings/approved'+str(i)).set({'uid':'old'+str(i),'assignmentId':'approved'+str(i),'phrase':phrase,'status':'saved','technicalCheck':{'passed':True},'consensus':{'status':'approved'}})
+  self.player('second')
+  other_id=token_hex(16);other=self.db.document('pilotRecordings/'+other_id)
+  answers=[]
+  for i in range(3):
+   uid='second-reviewer'+str(i);self.player(uid)
+   answer={'uid':uid,'reviewId':'second-review'+str(i),'status':'pending','text':phrase['text'],'quality':'good'}
+   self.db.document('pilotReviews/'+answer['reviewId']).set(answer);answers.append(answer)
+  other.set({'uid':'second','assignmentId':other_id,'phrase':phrase,'status':'saved','technicalCheck':{'passed':True,'durationSec':2},'reviewResults':answers})
+  with ThreadPoolExecutor(max_workers=2) as pool:list(pool.map(self.w.qualify,[self.record,other]))
+  states=[r.get().to_dict()['consensus']['status'] for r in [self.record,other]]
+  self.assertEqual(sorted(states),['approved','collection_full'])
+  self.assertEqual(self.db.document('corpusCoverage/daily-use-v1').get().to_dict()[phrase['id']]['approved'],20)
+ def test_operator_rejection_releases_slot_and_survives_requalification(self):
+  self.answers();self.record.update({'corpusDisposition':'rejected'})
+  self.w.qualify(self.record);self.w.qualify(self.record)
+  self.assertEqual(self.record.get().to_dict()['consensus']['status'],'rejected')
+  phrase=self.record.get().to_dict()['phrase']['id']
+  self.assertEqual(self.db.document('corpusCoverage/daily-use-v1').get().to_dict()[phrase],{'approved':0,'pending':0})
+  self.assertFalse(self.db.document('rewardEvents/'+self.rid+'-sign-signer').get().exists)
 if __name__=='__main__':unittest.main()

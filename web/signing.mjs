@@ -39,11 +39,12 @@ export class Signing {
   this.el('submission-result').hidden=s!=='saved';
   this.el('signing-title').textContent=s==='saved'?'Your submission':'Your signing challenge';
   const outcome=j?.outcome;
-  this.el('signing-outcome').textContent=({approved:'Approved · Test points earned',quality_check_required:'Video quality needs a check',adjudication_required:'Needs a closer look',test_only:'Test recording',participation_paused:'Participation paused'})[outcome?.status]||'Awaiting review';
+  this.el('signing-outcome').textContent=({approved:'Approved · Test points earned',quality_check_required:'Video quality needs a check',adjudication_required:'Needs a closer look',collection_full:'Collection target reached',rejected:'Recording not approved',test_only:'Test recording',participation_paused:'Participation paused'})[outcome?.status]||'Awaiting review';
   this.el('signing-progress').textContent=outcome?.status==='approved'?'Your test points have been added. They have no cash value.':outcome?.status==='quality_check_required'?'The meaning matched, but video quality needs a human check.':outcome?.status==='adjudication_required'?'Reviews need adjudication. No signer points awarded.':`${outcome?.independentReviews||0} of 3 independent reviews received.`;
   this.el('get-phrase').hidden=Boolean(j)&&!['saved','failed','blocked'].includes(s);
   this.el('get-phrase').textContent=j?'Try another phrase ↗':'Get my phrase ↗';this.el('get-phrase').disabled=this.busy;
   this.el('phrase-panel').hidden=!j?.prompt;this.el('phrase-text').textContent=j?.prompt?`“${j.prompt}”`:'';
+  this.el('phrase-coverage').textContent=Number.isInteger(j?.approvedSigners)&&Number.isInteger(j?.signerCap)?`${j.approvedSigners} / ${j.signerCap} approved unique signers`:'';
   const assigned=s==='assigned';
   this.el('open-camera').hidden=!assigned || Boolean(this.stream) || Boolean(this.blob);
   this.el('record').hidden=!assigned || !this.stream || this.recording || Boolean(this.blob);

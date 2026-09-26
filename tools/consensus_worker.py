@@ -19,6 +19,28 @@ class ConsensusWorker(ReviewWorker):
             invites=self.identities(tx,uids)
             active={u:self.consent(tx,u) for u in uids}
             decision=decide(record,reviews,invites,active)
+            if record.get('corpusDisposition')=='rejected':
+                decision={**decision,'status':'rejected','signerPoints':0}
+            from corpus import counts, cap_for
+            from google.cloud.firestore_v1.base_query import FieldFilter
+            prompt=record.get('phrase',{}).get('id')
+            coverage_ref=self.db.document('corpusCoverage/'+BATCH)
+            coverage=coverage_ref.get(transaction=tx).to_dict() or {}
+            policy=self.db.document('corpusPolicy/'+BATCH).get(transaction=tx).to_dict() or {}
+            rows=[x.to_dict() for x in self.db.collection('pilotRecordings').where(filter=FieldFilter('phrase.id','==',prompt)).stream(transaction=tx)]
+            self.identities(tx,[r['uid'] for r in rows],invites)
+            from consensus import person_key
+            person=person_key(record['uid'],invites)
+            signer_ref=self.db.document('corpusSigners/'+person)
+            signer=self.signer_cohort(tx,person,invites)
+            # Existing approvals keep their place. New decisions cannot exceed the cap,
+            # even when legacy data contains too many pending assignments.
+            others=[r for r in rows if r.get('assignmentId')!=record.get('assignmentId')]
+            if decision['status']=='approved' and record.get('consensus',{}).get('status')!='approved':
+                duplicate=any(person_key(r['uid'],invites)==person and r.get('consensus',{}).get('status')=='approved' for r in others)
+                if duplicate or counts(others,invites)['approved']>=cap_for(policy,prompt):
+                    decision={**decision,'status':'collection_full','signerPoints':0}
+            after=counts([*others,{**record,'consensus':decision}],invites)
             # Existing awards are immutable. Never manufacture a second award on retries.
             rewards=[]
             if decision['signerPoints']:
@@ -40,9 +62,15 @@ class ConsensusWorker(ReviewWorker):
                 job=self.db.document('reviewJobs/'+r['uid']);j=job.get(transaction=tx).to_dict() or {}
                 if j.get('reviewId')==r['reviewId']:jobs.append((job,j,r))
             # All reads precede all writes, including consent and reward deduplication.
+            if coverage.get(prompt)!=after:tx.set(coverage_ref,{**coverage,prompt:after})
+            tx.set(signer_ref,signer)
+            if record.get('corpusSplit')!=signer['split'] or record.get('corpusSignerId')!=person:
+                tx.update(ref,{'corpusSplit':signer['split'],'corpusSignerId':person,'exportEligible':False})
             if record.get('consensus')!=decision:
                 tx.update(ref,{'consensus':decision,'reviewLimit':decision['reviewLimit'],
                                'exportEligible':False,'consensusExported':False})
+            if sj.get('assignmentId')==ref.id:
+                tx.update(signer_job,{'approvedSigners':after['approved'],'signerCap':cap_for(policy,prompt)})
             summary={'status':decision['status'],'independentReviews':decision['independentReviews'],'requiredReviews':3}
             if sj.get('assignmentId')==ref.id and sj.get('outcome')!=summary:tx.update(signer_job,{'outcome':summary})
             for job,j,r in jobs:
@@ -81,8 +109,8 @@ class ConsensusWorker(ReviewWorker):
 
     def publish_dashboards(self):
         from dashboard import summary
-        records=[s.to_dict() for s in self.db.collection('pilotRecordings').limit(MAX_RECORDINGS).stream()]
-        reviews=[s.to_dict() for s in self.db.collection('pilotReviews').limit(MAX_RECORDINGS*5).stream()]
+        records=[s.to_dict() for s in self.db.collection('pilotRecordings').stream()]
+        reviews=[s.to_dict() for s in self.db.collection('pilotReviews').stream()]
         # Page through registered players, including those without legacy invites.
         query=self.db.collection('players').order_by('__name__').limit(50)
         cursor=getattr(self,'_dashboard_cursor',None)
@@ -92,7 +120,8 @@ class ConsensusWorker(ReviewWorker):
         uids={p.id for p in players}
         for record in records:uids.update([record['uid'],*record.get('reviewerIds',[])])
         invites=self.identities(None,uids)
-        coverage=self.db.document('promptCoverage/'+BATCH).get().to_dict() or {}
+        coverage=self.db.document('corpusCoverage/'+BATCH).get().to_dict() or {}
+        policy=self.db.document('corpusPolicy/'+BATCH).get().to_dict() or {}
         reserved=(self.db.document('pilotLimits/'+BATCH).get().to_dict() or {}).get('reserved',0)
         for player in players:
             uid=player.id;profile=player.to_dict();invite=invites[uid]
@@ -101,7 +130,7 @@ class ConsensusWorker(ReviewWorker):
             from consensus import person_key
             history=self.db.document('promptParticipants/'+person_key(uid,invites)).get().to_dict() or {}
             activity['signingPhraseIds']=list(set(activity.get('signingPhraseIds',[]))|set(history.get('meaningIds',[])))
-            value=summary(uid,records,reviews,invites,activity,reserved,coverage)
+            value=summary(uid,records,reviews,invites,activity,reserved,coverage,policy)
             sign=(self.db.document('signingJobs/'+uid).get().to_dict() or {}).get('state')
             review=(self.db.document('reviewJobs/'+uid).get().to_dict() or {}).get('state')
             value['signInProgress']=sign in ('requested','assigned','upload_requested','granting','uploading','submitted')
