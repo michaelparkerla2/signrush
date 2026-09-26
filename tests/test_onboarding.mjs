@@ -20,7 +20,7 @@ test('registration requires explicit consent and confirms the exact versions',as
  assert.equal(controller.state.phase,'consent');assert.equal(calls.length,2);
  await controller.consent(true);
  assert.equal(controller.state.phase,'ready');
- assert.deepEqual(JSON.parse(calls[2].options.body),{accept:true,terms_version:'pilot-v1',disclosure_version:'training-v1'});
+ assert.deepEqual(JSON.parse(calls[2].options.body),{accept:true,terms_version:'pilot-v1',disclosure_version:'training-v1',adultConfirmed:true,background:{}});
  for(const call of calls){
   assert.equal(call.options.headers.Authorization,'Bearer synthetic-token');
   assert.equal(call.options.redirect,'error');assert.equal(call.options.credentials,'omit');

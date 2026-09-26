@@ -157,11 +157,12 @@ class ReviewWorker(Worker):
             record_ref=self.db.document('pilotRecordings/'+review.get('recordingId','missing'))
             record=record_ref.get(transaction=tx).to_dict() or {}
             okay=self.consent(tx,job['uid']) and self.consent(tx,record.get('uid','missing')) and self.independent(tx,record.get('uid','missing'),job['uid'])
+            rights=self.consent_evidence(tx,job['uid'])
             text=job.get('text','').strip()
             if not okay or review.get('uid')!=job['uid'] or review.get('status')!='assigned' or record.get('uid')==job['uid'] or record.get('status')!='saved' or not 1<=len(text)<=1000:
                 tx.update(ref,{'state':'blocked','playbackURL':self.fs.DELETE_FIELD});return
             answer={'reviewId':job['reviewId'],'uid':job['uid'],'text':text,'submittedAt':job['submittedAt'],
-                    'status':'pending','mode':'test','quality':job.get('quality','not_sure')}
+                    'status':'pending','mode':'test','quality':job.get('quality','not_sure'),'rights':rights}
             tx.update(review_ref,{**answer,'exported':False})
             tx.update(record_ref,{'reviewResults':record.get('reviewResults',[])+[answer]})
             tx.update(ref,{'state':'pending','playbackURL':self.fs.DELETE_FIELD,
@@ -174,6 +175,7 @@ class ReviewWorker(Worker):
             review=snap.to_dict()
             data={k:review[k] for k in ['reviewId','recordingId','uid','text','status','mode']}
             data['quality']=review.get('quality','not_sure')
+            data['rights']=review.get('rights',{'rightsStatus':'legacy_unverified'})
             data['submittedAt']=review['submittedAt'].isoformat()
             self.put_json(self.raw,f"pilot/reviews/{snap.id}.json",data)
             snap.reference.update({'exported':True})

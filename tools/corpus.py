@@ -40,7 +40,13 @@ def available(value, cap):
 
 
 def training_eligible(record, signer):
+    # Evidence is necessary, not sufficient: an exporter must also recheck current consent.
+    from consent_policy import POLICY
+    rights=record.get('rights') or {}
+    licensed=(rights.get('rightsStatus')=='license_recorded'
+              and rights.get('consentPath','').startswith('players/'+record.get('uid','')+'/consents/')
+              and all(rights.get(k)==POLICY[k] for k in ('termsVersion','disclosureVersion','privacyVersion','bundleHash')))
     # All current test-mode records remain quarantined. Evaluation can NEVER train.
-    return (signer.get('split') == 'train' and record.get('corpusSplit') == 'train'
+    return (licensed and not record.get('rightsRestricted',False) and signer.get('split') == 'train' and record.get('corpusSplit') == 'train'
             and record.get('mode') != 'test' and record.get('exportEligible') is True
             and record.get('consensus', {}).get('status') == 'approved')

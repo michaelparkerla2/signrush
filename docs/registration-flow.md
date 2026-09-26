@@ -1,3 +1,5 @@
+> Current signup implementation: [Contributor rights](contributor-rights.md). One affirmative checkbox, optional private background and immutable commercial-license evidence supersede the older disclosure described below.
+
 # Player registration and consent flow
 
 Updated on 2026-09-14: the port-8088 preview now uses deployed Firestore registration in the free Spark project. The original same-origin API design described below remains a locally tested reference; it is not the active browser transport. See [live Firestore setup and verification status](firestore-setup-20260914.md).

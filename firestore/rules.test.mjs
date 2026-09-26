@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+
 import {before,after,beforeEach,test} from 'node:test';
 import {readFile} from 'node:fs/promises';
 import {initializeTestEnvironment,assertSucceeds,assertFails} from '@firebase/rules-unit-testing';
@@ -8,12 +10,12 @@ after(async()=>env?.cleanup());
 beforeEach(async()=>{await env.clearFirestore();await env.withSecurityRulesDisabled(async c=>{
  for(const uid of ['alice','bob'])await setDoc(doc(c.firestore(),'pilotInvites',uid),{active:true});
 });});
-const db=(uid='alice',verified=true)=>env.authenticatedContext(uid,{email_verified:verified,firebase:{sign_in_provider:'google.com'}}).firestore();
+const db=(uid='alice',verified=true)=>env.authenticatedContext(uid,{email:'synthetic@example.test',email_verified:verified,firebase:{sign_in_provider:'google.com'}}).firestore();
 const profile=()=>({uid:'alice',createdAt:serverTimestamp(),updatedAt:serverTimestamp(),status:'active',mode:'test',lastConsentId:null,consentAccepted:false});
 async function create(d=db()){return setDoc(doc(d,'players/alice'),profile());}
 function consent(d,id,action='accepted',extra={}){
  const b=writeBatch(d);
- b.set(doc(d,`players/alice/consents/${id}`),{action,termsVersion:'pilot-v1',disclosureVersion:'training-v1',recordedAt:serverTimestamp(),...extra});
+ b.set(doc(d,`players/alice/consents/${id}`),{action,termsVersion:'terms-2026-09-26-v1',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7',uid:'alice',email:'synthetic@example.test',adultConfirmed:action==='accepted',publicDisplayAllowed:false,recordedAt:serverTimestamp(),...extra});
  b.update(doc(d,'players/alice'),{lastConsentId:id,consentAccepted:action==='accepted',updatedAt:serverTimestamp()});
  return b.commit();
 }
@@ -38,8 +40,8 @@ test('accept and withdraw atomically with immutable history',async()=>{
 test('partial writes and mismatched snapshots are rejected',async()=>{
  const d=db();await create(d);
  await assertFails(updateDoc(doc(d,'players/alice'),{lastConsentId:'orphan',consentAccepted:true,updatedAt:serverTimestamp()}));
- await assertFails(setDoc(doc(d,'players/alice/consents/orphan'),{action:'accepted',termsVersion:'pilot-v1',disclosureVersion:'training-v1',recordedAt:serverTimestamp()}));
- const b=writeBatch(d);b.set(doc(d,'players/alice/consents/mismatch'),{action:'withdrawn',termsVersion:'pilot-v1',disclosureVersion:'training-v1',recordedAt:serverTimestamp()});
+ await assertFails(setDoc(doc(d,'players/alice/consents/orphan'),{action:'accepted',termsVersion:'terms-2026-09-26-v1',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7',uid:'alice',email:'synthetic@example.test',adultConfirmed:true,publicDisplayAllowed:false,recordedAt:serverTimestamp()}));
+ const b=writeBatch(d);b.set(doc(d,'players/alice/consents/mismatch'),{action:'withdrawn',termsVersion:'terms-2026-09-26-v1',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7',uid:'alice',email:'synthetic@example.test',adultConfirmed:false,publicDisplayAllowed:false,recordedAt:serverTimestamp()});
  b.update(doc(d,'players/alice'),{lastConsentId:'mismatch',consentAccepted:true,updatedAt:serverTimestamp()});await assertFails(b.commit());
 });
 test('old versions, client times and event replay are rejected',async()=>{
@@ -152,7 +154,7 @@ test('public Google registration needs no invite but consent and isolation still
  await assertFails(getDoc(doc(d,'players/alice')));
  await assertFails(setDoc(doc(d,'signingJobs/new-player'),{uid:'new-player',state:'requested',requestedAt:serverTimestamp()}));
  const b=writeBatch(d);
- b.set(doc(d,'players/new-player/consents/join'),{action:'accepted',termsVersion:'pilot-v1',disclosureVersion:'training-v1',recordedAt:serverTimestamp()});
+ b.set(doc(d,'players/new-player/consents/join'),{action:'accepted',termsVersion:'terms-2026-09-26-v1',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7',uid:'new-player',email:'synthetic@example.test',adultConfirmed:true,publicDisplayAllowed:false,recordedAt:serverTimestamp()});
  b.update(ref,{consentAccepted:true,lastConsentId:'join',updatedAt:serverTimestamp()});
  await assertSucceeds(b.commit());
  for(const kind of ['signingJobs','reviewJobs'])await assertSucceeds(setDoc(doc(d,kind,'new-player'),{uid:'new-player',state:'requested',requestedAt:serverTimestamp()}));
@@ -203,7 +205,7 @@ test('withdrawal atomically removes a public leaderboard entry',async()=>{
  const d=db();await create(d);await consent(d,'one');
  const join=writeBatch(d);join.set(doc(d,'gameProfiles/alice'),{alias:'Tester',avatar:'nova',listed:true,updatedAt:serverTimestamp()});join.set(doc(d,'leaderboard/alice'),{alias:'Tester',avatar:'nova',points:0,updatedAt:serverTimestamp()});await join.commit();
  await assertFails(consent(d,'two','withdrawn'));
- const b=writeBatch(d);b.set(doc(d,'players/alice/consents/two'),{action:'withdrawn',termsVersion:'pilot-v1',disclosureVersion:'training-v1',recordedAt:serverTimestamp()});b.update(doc(d,'players/alice'),{lastConsentId:'two',consentAccepted:false,updatedAt:serverTimestamp()});b.delete(doc(d,'leaderboard/alice'));b.delete(doc(d,'gameProfiles/alice'));await assertSucceeds(b.commit());
+ const b=writeBatch(d);b.set(doc(d,'players/alice/consents/two'),{action:'withdrawn',termsVersion:'terms-2026-09-26-v1',disclosureVersion:'commercial-2026-09-26-v1',privacyVersion:'privacy-2026-09-26-v1',bundleHash:'93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7',uid:'alice',email:'synthetic@example.test',adultConfirmed:false,publicDisplayAllowed:false,recordedAt:serverTimestamp()});b.update(doc(d,'players/alice'),{lastConsentId:'two',consentAccepted:false,updatedAt:serverTimestamp()});b.delete(doc(d,'leaderboard/alice'));b.delete(doc(d,'gameProfiles/alice'));await assertSucceeds(b.commit());
  await assertFails(setDoc(doc(d,'leaderboard/alice'),{alias:'Tester',avatar:'nova',points:0,updatedAt:serverTimestamp()}));
 });
 
@@ -218,4 +220,36 @@ test('adjudication history stays private and revealed prompt cannot be used to r
  await assertFails(updateDoc(doc(d,'reviewJobs/alice'),{referencePrompt:'Forged'}));
  await assertFails(getDoc(doc(d,'meaningAssessmentHistory/finding')));
  await assertFails(setDoc(doc(d,'meaningAssessmentHistory/forged'),{verdict:'equivalent'}));
+});
+
+test('one agreement stores current evidence and optional private background atomically',async()=>{
+ const {firestoreRegistration}=await import('../web/firestore-registration.mjs');
+ const {pilotDisclosure}=await import('../web/pilot-disclosure.mjs');
+ const sdk=await import('firebase/firestore');
+ const transport=firestoreRegistration({currentUser:{uid:'alice',email:'synthetic@example.test',emailVerified:true}},db(),sdk,pilotDisclosure);
+ const account=await transport('/v1/account',{method:'POST'});assert.equal(account.ok,true);
+ const payload={accept:true,terms_version:pilotDisclosure.terms_version,disclosure_version:pilotDisclosure.disclosure_version,adultConfirmed:true,background:{aslExperience:'fluent',hearingIdentity:'deaf',aslRole:'translator'}};
+ const missing=await transport('/v1/consent',{method:'POST',body:JSON.stringify({...payload,adultConfirmed:false})});assert.equal(missing.ok,false);
+ const saved=await transport('/v1/consent',{method:'POST',body:JSON.stringify(payload)});assert.equal(saved.ok,true);
+ const profile=(await getDoc(doc(db(),'players/alice'))).data();
+ const receipt=(await getDoc(doc(db(),`players/alice/consents/${profile.lastConsentId}`))).data();
+ assert.equal(receipt.bundleHash,pilotDisclosure.bundle_hash);assert.equal(receipt.adultConfirmed,true);assert.equal(receipt.publicDisplayAllowed,false);
+ assert.equal((await getDoc(doc(db(),'contributorProfiles/alice'))).data().aslRole,'translator');
+ await assertFails(getDoc(doc(db('bob'),'contributorProfiles/alice')));
+ await assertFails(updateDoc(doc(db(),`players/alice/consents/${profile.lastConsentId}`),{adultConfirmed:false}));
+});
+test('old consent, forged release and missing adulthood cannot unlock participation',async()=>{
+ const d=db();await create(d);
+ for(const extra of [{adultConfirmed:false},{bundleHash:'forged'},{termsVersion:'pilot-v1'},{publicDisplayAllowed:true}])await assertFails(consent(d,'bad'+Object.keys(extra)[0],'accepted',extra));
+ await env.withSecurityRulesDisabled(async c=>{
+  await setDoc(doc(c.firestore(),'players/alice/consents/old'),{action:'accepted',termsVersion:'pilot-v1',disclosureVersion:'training-v1'});
+  await updateDoc(doc(c.firestore(),'players/alice'),{lastConsentId:'old',consentAccepted:true});
+ });
+ await assertFails(setDoc(doc(d,'signingJobs/alice'),{uid:'alice',state:'requested',requestedAt:serverTimestamp()}));
+});
+test('privacy requests are private and may be filed after consent withdrawal',async()=>{
+ const d=db();await create(d);await consent(d,'one');await consent(d,'two','withdrawn');
+ await assertSucceeds(setDoc(doc(d,'privacyRequests/request'),{uid:'alice',kind:'deletion',details:'Please review my data.',status:'requested',createdAt:serverTimestamp()}));
+ await assertFails(getDoc(doc(db('bob'),'privacyRequests/request')));
+ await assertFails(updateDoc(doc(d,'privacyRequests/request'),{status:'completed'}));
 });

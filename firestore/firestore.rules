@@ -13,11 +13,21 @@ service cloud.firestore {
     && d.keys().hasOnly(['uid','createdAt','updatedAt','status','mode','lastConsentId','consentAccepted'])
     && d.uid == uid && d.mode == 'test' && d.consentAccepted is bool;
   }
+  function currentConsent(d) {
+   return d.termsVersion == 'terms-2026-09-26-v1'
+    && d.disclosureVersion == 'commercial-2026-09-26-v1'
+    && d.privacyVersion == 'privacy-2026-09-26-v1'
+    && d.bundleHash == '93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7'
+    && d.adultConfirmed == true && d.publicDisplayAllowed == false;
+  }
   function eventShape(d) {
-   return d.keys().hasAll(['action','termsVersion','disclosureVersion','recordedAt'])
-    && d.keys().hasOnly(['action','termsVersion','disclosureVersion','recordedAt'])
+   return d.keys().hasAll(['action','termsVersion','disclosureVersion','privacyVersion','bundleHash','recordedAt','uid','email','adultConfirmed','publicDisplayAllowed'])
+    && d.keys().hasOnly(['action','termsVersion','disclosureVersion','privacyVersion','bundleHash','recordedAt','uid','email','adultConfirmed','publicDisplayAllowed'])
     && d.action in ['accepted','withdrawn']
-    && d.termsVersion == 'pilot-v1' && d.disclosureVersion == 'training-v1'
+    && d.termsVersion == 'terms-2026-09-26-v1' && d.disclosureVersion == 'commercial-2026-09-26-v1'
+    && d.privacyVersion == 'privacy-2026-09-26-v1' && d.bundleHash == '93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7'
+    && d.uid == request.auth.uid && d.email == request.auth.token.email
+    && d.adultConfirmed == (d.action == 'accepted') && d.publicDisplayAllowed == false
     && d.recordedAt == request.time;
   }
   function participating(uid) {
@@ -26,8 +36,31 @@ service cloud.firestore {
     && get(/databases/$(database)/documents/players/$(uid)).data.mode == 'test'
     && get(/databases/$(database)/documents/players/$(uid)).data.consentAccepted == true
     && get(/databases/$(database)/documents/players/$(uid)/consents/$(get(/databases/$(database)/documents/players/$(uid)).data.lastConsentId)).data.action == 'accepted'
-    && get(/databases/$(database)/documents/players/$(uid)/consents/$(get(/databases/$(database)/documents/players/$(uid)).data.lastConsentId)).data.termsVersion == 'pilot-v1'
-    && get(/databases/$(database)/documents/players/$(uid)/consents/$(get(/databases/$(database)/documents/players/$(uid)).data.lastConsentId)).data.disclosureVersion == 'training-v1';
+    && currentConsent(get(/databases/$(database)/documents/players/$(uid)/consents/$(get(/databases/$(database)/documents/players/$(uid)).data.lastConsentId)).data);
+  }
+  match /contributorProfiles/{uid} {
+   allow get: if enrolledAccount(uid);
+   allow list, delete: if false;
+   allow create, update: if enrolledAccount(uid)
+    && request.resource.data.keys().hasOnly(['aslExperience','hearingIdentity','aslRole','updatedAt','consentId'])
+    && request.resource.data.aslExperience in ['unspecified','learning','conversational','fluent','native']
+    && request.resource.data.hearingIdentity in ['unspecified','deaf','hard_of_hearing','hearing','self_described']
+    && request.resource.data.aslRole in ['unspecified','signer','learner','interpreter','translator','educator','other']
+    && request.resource.data.updatedAt == request.time
+    && getAfter(/databases/$(database)/documents/players/$(uid)).data.lastConsentId == request.resource.data.consentId
+    && getAfter(/databases/$(database)/documents/players/$(uid)/consents/$(request.resource.data.consentId)).data.recordedAt == request.time
+    && currentConsent(getAfter(/databases/$(database)/documents/players/$(uid)/consents/$(request.resource.data.consentId)).data);
+  }
+  match /privacyRequests/{id} {
+   // Requests remain available after consent withdrawal; no participation check.
+   allow create: if request.auth != null && request.auth.token.email_verified == true
+    && request.resource.data.keys().hasOnly(['uid','kind','details','status','createdAt'])
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.kind in ['access','correction','deletion','restriction']
+    && request.resource.data.details is string && request.resource.data.details.size() <= 2000
+    && request.resource.data.status == 'requested' && request.resource.data.createdAt == request.time;
+   allow get: if request.auth != null && resource.data.uid == request.auth.uid;
+   allow list, update, delete: if false;
   }
   match /signingJobs/{uid} {
    allow get: if participating(uid);

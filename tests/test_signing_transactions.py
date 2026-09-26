@@ -30,7 +30,7 @@ class Transactions(unittest.TestCase):
  def player(self,uid):
   self.db.document('pilotInvites/'+uid).set({'active':True})
   self.db.document('players/'+uid).set({'status':'active','mode':'test','consentAccepted':True,'lastConsentId':'one'})
-  self.db.document('players/'+uid+'/consents/one').set({'action':'accepted','termsVersion':'pilot-v1','disclosureVersion':'training-v1'})
+  self.db.document('players/'+uid+'/consents/one').set({'action':'accepted','termsVersion':'terms-2026-09-26-v1','disclosureVersion':'commercial-2026-09-26-v1','privacyVersion':'privacy-2026-09-26-v1','bundleHash':'93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7','adultConfirmed':True,'publicDisplayAllowed':False})
   ref=self.db.document('signingJobs/'+uid);ref.set({'uid':uid,'state':'requested','requestedAt':firestore.SERVER_TIMESTAMP});return ref
  def test_concurrent_reservations_are_capped_per_prompt(self):
   from tools.signing_worker import PHRASES
@@ -58,6 +58,9 @@ class Transactions(unittest.TestCase):
   record=self.db.document('pilotRecordings/'+job['assignmentId']).get().to_dict()
   self.assertEqual(record['sourceSha256'],hashlib.sha256(b'synthetic').hexdigest());self.assertFalse(record['exportEligible']);self.assertIsNone(record['translation'])
   self.assertEqual(len(self.w.heldout.blobs),1)
+  self.assertEqual(record['rights']['consentPath'],'players/p/consents/one')
+  self.assertEqual(record['rights']['rightsStatus'],'license_recorded')
+  self.assertFalse(record['rights']['publicDisplayAllowed'])
  def test_interrupted_grant_recovers_after_lease_without_new_reservation(self):
   from datetime import datetime,timedelta,timezone
   ref=self.player('p');self.w.assign(ref)

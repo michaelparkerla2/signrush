@@ -1,0 +1,20 @@
+{
+  "termsVersion": "terms-2026-09-26-v1",
+  "disclosureVersion": "commercial-2026-09-26-v1",
+  "privacyVersion": "privacy-2026-09-26-v1",
+  "documents": {
+    "terms": {
+      "path": "/legal/terms.html",
+      "sha256": "2d9a3b81fabea57088349e6cb18c79780aff6a68313c8e829c6c39fab5ddb991"
+    },
+    "contributor-license": {
+      "path": "/legal/contributor-license.html",
+      "sha256": "46211517a1190f4d6dcd011510f6097e7987653d9a77b245c5813bd1ccfcbaf4"
+    },
+    "privacy": {
+      "path": "/legal/privacy.html",
+      "sha256": "8fcbc5e86ef774646e512846a4be28598d18b5f9cfc9970755d4b13df127fe18"
+    }
+  },
+  "bundleHash": "93843951df66917913dd0f08de8dbcd9fca94214ee8be9cf7c6c663d0b8c2da7"
+}

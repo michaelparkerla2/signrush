@@ -20,9 +20,12 @@ class CorpusPolicy(unittest.TestCase):
   for value in [True,0,21,500]:
    with self.assertRaises(ValueError):cap_for({'caps':{'a':value}},'a')
  def test_evaluation_cannot_train_and_current_test_mode_is_quarantined(self):
-  r={'corpusSplit':'train','exportEligible':True,'mode':'production','consensus':{'status':'approved'}}
+  from consent_policy import POLICY,evidence
+  r={'uid':'person','rights':evidence(POLICY,'person','consent'),'corpusSplit':'train','exportEligible':True,'mode':'production','consensus':{'status':'approved'}}
   for split in ['validation','test']:self.assertFalse(training_eligible(r,{'split':split}))
   self.assertFalse(training_eligible({**r,'mode':'test'},{'split':'train'}))
   self.assertTrue(training_eligible(r,{'split':'train'}))
+  self.assertFalse(training_eligible({**r,'rights':{}},{'split':'train'}))
+  self.assertFalse(training_eligible({**r,'rightsRestricted':True},{'split':'train'}))
   self.assertEqual(split_for('person'),split_for('person'))
 if __name__=='__main__':unittest.main()

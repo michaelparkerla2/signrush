@@ -4,6 +4,7 @@ Use authorized Cloud Shell ADC. One current job per player, bounded daily batch.
 rules permit requests only; every persisted decision is rechecked here. Not an
 always-on production worker: explicitly bounded sessions, default 30 minutes.
 """
+from consent_policy import current as current_consent_event, evidence, POLICY
 import argparse
 import hashlib
 import json
@@ -30,8 +31,7 @@ PHRASES = json.loads((Path(__file__).resolve().parents[1] / 'data/pilot-phrases.
 def eligible(invite, player, event):
     return ((not invite or invite.get('active') is True) and player.get('status') == 'active'
             and player.get('mode') == 'test' and player.get('consentAccepted') is True
-            and event.get('action') == 'accepted' and event.get('termsVersion') == 'pilot-v1'
-            and event.get('disclosureVersion') == 'training-v1')
+            and current_consent_event(event))
 
 
 def valid_upload(job):
@@ -82,6 +82,13 @@ class Worker:
             event=self.db.document('players/'+uid+'/consents/'+player['lastConsentId']).get(transaction=tx).to_dict() or {}
         return eligible(invite,player,event)
 
+    def consent_evidence(self,tx,uid):
+        player=self.db.document('players/'+uid).get(transaction=tx).to_dict() or {}
+        consent_id=player.get('lastConsentId')
+        if not consent_id:return None
+        event=self.db.document(f'players/{uid}/consents/{consent_id}').get(transaction=tx).to_dict() or {}
+        return evidence(event,uid,consent_id) if current_consent_event(event) else None
+
     def identities(self,tx,uids,known=None):
         values={} if known is None else known
         for uid in uids:
@@ -117,6 +124,7 @@ class Worker:
             if not job or job['state']!='requested':return
             uid=job['uid']
             ok=self.consent(tx,uid)
+            rights=self.consent_evidence(tx,uid)
             activity_ref=self.db.document('pilotActivity/'+uid)
             activity=activity_ref.get(transaction=tx).to_dict() or {}
             # Canonical linked identity: one reservation per meaning per known person.
@@ -154,7 +162,7 @@ class Worker:
             tx.set(person_ref,{'meaningIds':list(set(history.get('meaningIds',[]))|{phrase['id']})})
             tx.set(activity_ref,{**activity,'signingPhraseIds':list(set(activity.get('signingPhraseIds',[])+[phrase['id']]))})
             record={'uid':uid,'assignmentId':rid,'phrase':phrase,'status':'assigned',
-                    'createdAt':self.fs.SERVER_TIMESTAMP,'consentVersion':'training-v1','mode':'test',
+                    'createdAt':self.fs.SERVER_TIMESTAMP,'consentVersion':POLICY['disclosureVersion'],'rights':rights,'mode':'test',
                     'promptVersion':phrase['version'],'batch':BATCH,'corpusSignerId':person,'corpusSplit':signer['split']}
             tx.create(self.db.document('pilotRecordings/'+rid),record)
             tx.set(counter,{'reserved':count+1,'acceptedTarget':MAX_TASKS})
@@ -248,7 +256,7 @@ class Worker:
             'objectKey':source_key,'generation':str(generation),'sourceSha256':digest,'size':len(payload),
             'phraseId':record['phrase']['id'],'promptVersion':record['phrase'].get('version',1),
             'corpusSplit':record.get('corpusSplit','quarantine'),'batch':record.get('batch','legacy-v1'),'corpusSignerId':record.get('corpusSignerId',record['uid']),'technicalCheck':quality,'reviewResults':[],
-            'translation':None,'mode':'test','exportEligible':False}
+            'translation':None,'mode':'test','exportEligible':False,'rights':record.get('rights',{'rightsStatus':'legacy_unverified'})}
         answer={'assignmentId':job['assignmentId'],'originalPrompt':record['phrase'],
                 'consentVersion':record['consentVersion'],'referenceStatus':'unvalidated_prompt'}
         self.put_json(self.heldout,f"pilot/references/{job['assignmentId']}.json",answer)

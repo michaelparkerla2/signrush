@@ -70,7 +70,8 @@ const registration=new Onboarding(state=>{
  byId('account-toggle').hidden=!ready;
  byId('account-toggle').setAttribute('aria-expanded','false');
  byId('account-panel').hidden=ready;
- byId('agreement-details').open=!ready;
+ byId('agreement-details').open=false;
+ byId('privacy-request-panel').hidden=phase==='signed-out'||phase==='loading';
  byId('task-modes').hidden=!ready;
  byId('test-rewards').hidden=!ready;
  if(ready&&rewardContext&&!rewardUnsubscribe)rewardUnsubscribe=rewardContext();
@@ -91,9 +92,10 @@ const registration=new Onboarding(state=>{
  byId('retry-registration').hidden=phase!=='unavailable';
  byId('withdraw').hidden=phase!=='ready';
  byId('agree').checked=false;byId('save-consent').disabled=true;
+ if(phase==='signed-out'){for(const id of ['asl-experience','hearing-identity','asl-role'])byId(id).value='unspecified';byId('privacy-request-text').value='';byId('privacy-request-status').textContent='';}
  byId('registration-status').textContent=state.message || ({
   loading:'Checking your player profile…',
-  consent:state.withdrawn?'Your agreement was withdrawn. Participation is paused.':'Read the rules and training disclosure before joining the pilot.',
+  consent:state.withdrawn?'Your agreement was withdrawn. Participation is paused.':'Welcome to SignRush! A little about you, then you’re ready to join.',
   saving:state.accept?'Saving your agreement…':'Withdrawing your agreement…',
   ready:''
  }[phase] || '');
@@ -111,7 +113,7 @@ byId('account-toggle').addEventListener('click',()=>{
  byId('account-toggle').setAttribute('aria-expanded',String(!panel.hidden));
 });
 byId('agree').addEventListener('change',()=>{byId('save-consent').disabled=!byId('agree').checked;});
-byId('consent-form').addEventListener('submit',event=>{event.preventDefault();if(byId('agree').checked)registration.consent(true);});
+byId('consent-form').addEventListener('submit',event=>{event.preventDefault();if(byId('agree').checked)registration.consent(true,{aslExperience:byId('asl-experience').value,hearingIdentity:byId('hearing-identity').value,aslRole:byId('asl-role').value});});
 byId('retry-registration').addEventListener('click',()=>{if(currentUser)registration.start(currentUser);});
 byId('withdraw').addEventListener('click',()=>registration.consent(false));
 const errors = {
@@ -133,6 +135,14 @@ try {
  // Standard Firestore in the no-billing Spark project; verified Google accounts and private owner-only rules.
  const useFirestoreRegistration = true;
  if(useFirestoreRegistration) registration.fetcher=firestoreRegistration(auth,firestoreSDK.getFirestore(app),firestoreSDK,pilotDisclosure);
+ byId('privacy-request-form').addEventListener('submit',async event=>{
+  event.preventDefault();const user=auth.currentUser;if(!user)return;
+  const button=byId('privacy-request-save');button.disabled=true;
+  byId('privacy-request-status').textContent='Saving your request…';
+  try{await firestoreSDK.addDoc(firestoreSDK.collection(firestoreSDK.getFirestore(app),'privacyRequests'),{uid:user.uid,kind:byId('privacy-request-kind').value,details:byId('privacy-request-text').value.trim(),status:'requested',createdAt:firestoreSDK.serverTimestamp()});
+   if(auth.currentUser?.uid===user.uid){byId('privacy-request-status').textContent='Request saved privately for review. No email was sent. This is not confirmation that processing is complete.';byId('privacy-request-text').value='';}
+  }catch{if(auth.currentUser?.uid===user.uid)byId('privacy-request-status').textContent='Could not confirm your request. Please try again.';}finally{button.disabled=false;}
+ });
  // Keep credentials only in memory. Never print, store, or put tokens in URLs.
  await sdk.setPersistence(auth,sdk.inMemoryPersistence);
  const provider = new sdk.GoogleAuthProvider();

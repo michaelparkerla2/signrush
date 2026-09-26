@@ -60,14 +60,15 @@ export class Onboarding {
     } catch(error) {this.failure(error,epoch);}
     finally {if(epoch===this.epoch)this.busy=false;}
   }
-  async consent(accept) {
+  async consent(accept, background = {}) {
     if(this.busy || !this.user || !this.disclosure ||
       (accept && this.state.phase!=='consent') || (!accept && this.state.phase!=='ready')) return;
     const epoch=this.epoch, disclosure=this.disclosure;
     this.busy=true; this.show({phase:'saving',accept,disclosure});
     try {
       const saved=await this.request('/v1/consent',{accept,
-        terms_version:disclosure.terms_version,disclosure_version:disclosure.disclosure_version},epoch);
+        terms_version:disclosure.terms_version,disclosure_version:disclosure.disclosure_version,
+        ...(accept?{adultConfirmed:true,background}: {})},epoch);
       if(epoch!==this.epoch)return;
       if(saved.accepted!==accept)throw new Error('agreement not confirmed');
       this.show({phase:accept?'ready':'consent',disclosure,withdrawn:!accept});
