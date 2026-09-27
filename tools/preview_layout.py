@@ -9,7 +9,7 @@ from urllib.parse import urlsplit,parse_qs
 import json
 import re
 ROOT=Path(__file__).resolve().parents[1]/'web'
-MODES={'landing','home','sign','review','arena','vision','payout','wallet','avatar'}
+MODES={'landing','home','sign','review','arena','payout','wallet','avatar'}
 SCRIPT='''
 import {Game} from '/game.mjs';
 import {Home} from '/home.mjs';
@@ -22,8 +22,8 @@ if(mode!=='landing'){
  const home=new Home(el('home'),el('payout-dialog'));
  home.connect({tasks:n=>{n({signAvailable:1,reviewAvailable:1,submitted:8,pending:3,approved:5,catalogBatch:'daily-use-v1'});return()=>{};},points:n=>{n(250);return()=>{};},payout:{load:async()=>null,save:async()=>{},remove:async()=>{}}});
  el('home').hidden=!['home','payout','wallet','avatar'].includes(mode);
- el('signing').hidden=mode!=='sign';el('reviewing').hidden=mode!=='review';el('arena').hidden=mode!=='arena';el('vision').hidden=mode!=='vision';
- for(const id of ['home','sign','review','arena','vision'])el('mode-'+id).setAttribute('aria-pressed',String(id===mode));
+ el('signing').hidden=mode!=='sign';el('reviewing').hidden=mode!=='review';el('arena').hidden=mode!=='arena';
+ for(const id of ['home','sign','review','arena'])el('mode-'+id).setAttribute('aria-pressed',String(id===mode));
  if(mode==='sign'){for(const id of ['capture-surface','phrase-panel','open-camera'])el(id).hidden=false;el('phrase-text').textContent='A synthetic phrase for layout review.';el('get-phrase').hidden=true;}
  if(mode==='review'){el('review-form').hidden=false;el('review-player').hidden=false;el('review-status').textContent='Synthetic layout only. No participant video loaded.';}
  if(mode==='payout'){el('payout-summary').hidden=true;el('payout-form').hidden=false;el('payout-dialog').showModal();}

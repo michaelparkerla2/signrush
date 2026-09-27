@@ -21,21 +21,17 @@ function showMode(mode){
  taskMode=mode;
  home.root.hidden=mode!=='home';
  document.getElementById('arena').hidden=mode!=='arena';
- document.getElementById('vision').hidden=mode!=='vision';
  document.getElementById('mode-arena').setAttribute('aria-pressed',String(mode==='arena'));
- document.getElementById('mode-vision').setAttribute('aria-pressed',String(mode==='vision'));
  document.getElementById('mode-home').setAttribute('aria-pressed',String(mode==='home'));
- document.getElementById('test-rewards').hidden=mode==='home'||mode==='vision';
+ document.getElementById('test-rewards').hidden=mode==='home';
  document.getElementById('mode-sign').setAttribute('aria-pressed',String(mode==='sign'));
  document.getElementById('mode-review').setAttribute('aria-pressed',String(mode==='review'));
  signing.root.hidden=mode!=='sign';reviewing.root.hidden=mode!=='review';
  if(mode!=='review')reviewing.el('review-video').pause();
- const shown=mode==='sign'?signing.root:mode==='review'?reviewing.root:mode==='arena'?document.getElementById('arena'):mode==='vision'?document.getElementById('vision'):home.root;
+ const shown=mode==='sign'?signing.root:mode==='review'?reviewing.root:mode==='arena'?document.getElementById('arena'):home.root;
  shown.scrollIntoView({block:'start'});
 }
 document.getElementById('mode-arena').onclick=()=>showMode('arena');
-document.getElementById('mode-vision').onclick=()=>showMode('vision');
-document.getElementById('home-vision').onclick=()=>showMode('vision');
 document.getElementById('home-arena').onclick=()=>showMode('arena');
 document.getElementById('mode-home').onclick=()=>showMode('home');
 document.getElementById('home-sign').onclick=()=>{showMode('sign');signing.requestPhrase();};
