@@ -7,8 +7,9 @@ from http.server import ThreadingHTTPServer,SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlsplit,parse_qs
 import json
+import re
 ROOT=Path(__file__).resolve().parents[1]/'web'
-MODES={'landing','home','sign','review','arena','payout','wallet','avatar'}
+MODES={'landing','home','sign','review','arena','vision','payout','wallet','avatar'}
 SCRIPT='''
 import {Game} from '/game.mjs';
 import {Home} from '/home.mjs';
@@ -21,7 +22,8 @@ if(mode!=='landing'){
  const home=new Home(el('home'),el('payout-dialog'));
  home.connect({tasks:n=>{n({signAvailable:1,reviewAvailable:1,submitted:8,pending:3,approved:5,catalogBatch:'daily-use-v1'});return()=>{};},points:n=>{n(250);return()=>{};},payout:{load:async()=>null,save:async()=>{},remove:async()=>{}}});
  el('home').hidden=!['home','payout','wallet','avatar'].includes(mode);
- el('signing').hidden=mode!=='sign';el('reviewing').hidden=mode!=='review';el('arena').hidden=mode!=='arena';
+ el('signing').hidden=mode!=='sign';el('reviewing').hidden=mode!=='review';el('arena').hidden=mode!=='arena';el('vision').hidden=mode!=='vision';
+ for(const id of ['home','sign','review','arena','vision'])el('mode-'+id).setAttribute('aria-pressed',String(id===mode));
  if(mode==='sign'){for(const id of ['capture-surface','phrase-panel','open-camera'])el(id).hidden=false;el('phrase-text').textContent='A synthetic phrase for layout review.';el('get-phrase').hidden=true;}
  if(mode==='review'){el('review-form').hidden=false;el('review-player').hidden=false;el('review-status').textContent='Synthetic layout only. No participant video loaded.';}
  if(mode==='payout'){el('payout-summary').hidden=true;el('payout-form').hidden=false;el('payout-dialog').showModal();}
@@ -41,7 +43,7 @@ class Handler(SimpleHTTPRequestHandler):
    links=' '.join(f'<a href="/?width={width}&mode={m}">{m}</a>' for m in sorted(MODES))
    self.send_html(f'<title>SignRush synthetic layout QA</title><p>LOCAL SYNTHETIC QA · No real accounts or writes</p><nav>{links}</nav><iframe title="Layout preview" src="/fixture?mode={mode}" style="display:block;width:{width}px;height:1000px;border:0"></iframe>');return
   if u.path=='/fixture':
-   source=(ROOT/'index.html').read_text().replace('<script type="module" src="login.js"></script>','<script type="module">'+SCRIPT.replace('MODE',json.dumps(mode))+'</script>')
+   source=re.sub(r'<script type="module" src="login\.js[^"]*"></script>','<script type="module">'+SCRIPT.replace('MODE',json.dumps(mode))+'</script>',(ROOT/'index.html').read_text(),count=1)
    self.send_html(source);return
   super().do_GET()
  def list_directory(self,path):self.send_error(404)

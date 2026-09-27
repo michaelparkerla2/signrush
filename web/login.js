@@ -2,9 +2,9 @@ import {firebaseConfig} from './firebase-config.js';
 import {Onboarding} from './onboarding.mjs';
 import {firestoreRegistration} from './firestore-registration.mjs';
 import {pilotDisclosure} from './pilot-disclosure.mjs';
-import {Signing,signingService} from './signing.mjs';
+import {Signing,signingService} from './signing.mjs?v=20260926k';
 import {Review,reviewService} from './review.mjs';
-import {Home,homeService} from './home.mjs';
+import {Home,homeService} from './home.mjs?v=20260926j';
 import {Game,gameService} from './game.mjs';
 const game=new Game(document);
 let gameContext=null;
@@ -21,21 +21,56 @@ function showMode(mode){
  taskMode=mode;
  home.root.hidden=mode!=='home';
  document.getElementById('arena').hidden=mode!=='arena';
+ document.getElementById('vision').hidden=mode!=='vision';
  document.getElementById('mode-arena').setAttribute('aria-pressed',String(mode==='arena'));
+ document.getElementById('mode-vision').setAttribute('aria-pressed',String(mode==='vision'));
  document.getElementById('mode-home').setAttribute('aria-pressed',String(mode==='home'));
- document.getElementById('test-rewards').hidden=mode==='home';
+ document.getElementById('test-rewards').hidden=mode==='home'||mode==='vision';
  document.getElementById('mode-sign').setAttribute('aria-pressed',String(mode==='sign'));
  document.getElementById('mode-review').setAttribute('aria-pressed',String(mode==='review'));
  signing.root.hidden=mode!=='sign';reviewing.root.hidden=mode!=='review';
  if(mode!=='review')reviewing.el('review-video').pause();
+ const shown=mode==='sign'?signing.root:mode==='review'?reviewing.root:mode==='arena'?document.getElementById('arena'):mode==='vision'?document.getElementById('vision'):home.root;
+ shown.scrollIntoView({block:'start'});
 }
 document.getElementById('mode-arena').onclick=()=>showMode('arena');
+document.getElementById('mode-vision').onclick=()=>showMode('vision');
+document.getElementById('home-vision').onclick=()=>showMode('vision');
 document.getElementById('home-arena').onclick=()=>showMode('arena');
 document.getElementById('mode-home').onclick=()=>showMode('home');
 document.getElementById('home-sign').onclick=()=>{showMode('sign');signing.requestPhrase();};
 document.getElementById('home-review').onclick=()=>{showMode('review');reviewing.request();};
 document.getElementById('mode-sign').onclick=()=>showMode('sign');
 document.getElementById('mode-review').onclick=()=>showMode('review');
+let beginSignIn=()=>{};
+let enterGame=false;
+function openRecorder(mode){
+ if(mode==='sign'){showMode('sign');signing.requestPhrase();}
+ else {showMode('review');if(reviewing.active)reviewing.request();}
+}
+function showAgreement(){
+ document.body.classList.remove('collecting');
+ const panel=document.getElementById('account-panel');
+ panel.hidden=false;
+ document.getElementById('account').hidden=false;
+ document.getElementById('onboarding').hidden=false;
+ const form=document.getElementById('consent-form');
+ form.hidden=registration.state.phase!=='consent';
+ document.getElementById('agreement-details').open=true;
+ authStatus('Agree once to join. Then you can sign, decode, and compete.');
+ const target=form.hidden?document.getElementById('registration-status'):document.getElementById('agree');
+ target.style.scrollMarginTop='16px';
+ target.scrollIntoView({block:'center'});
+}
+function startChallenge(mode){
+ const account=document.getElementById('account');
+ if(!currentUser&&account.hidden){beginSignIn();return;}
+ if(document.body.classList.contains('player-ready')){openRecorder(mode);return;}
+ enterGame=true;
+ showAgreement();
+}
+document.getElementById('sign-it').onclick=()=>startChallenge('sign');
+document.getElementById('decode-it').onclick=()=>startChallenge('review');
 const login = document.querySelector('#login');
 const status = document.querySelector('#status');
 const enterRush=document.querySelector('#enter-rush');
@@ -43,7 +78,7 @@ function setLoginDisabled(value){login.disabled=value;enterRush.disabled=value;}
 function authStatus(message){status.textContent=message;document.querySelector('#entry-status').textContent=message;}
 const account = document.querySelector('#account');
 const byId = id=>document.getElementById(id);
-let currentUser=null,previousRegistration=null,payoutAutoOpen=false,moderationUnsubscribe=null;
+let currentUser=null,payoutAutoOpen=false,moderationUnsubscribe=null;
 function openPayout(welcome=false){
  byId('cash-wallet').close();
  byId('payout-welcome').hidden=!welcome;
@@ -62,8 +97,6 @@ home.payout.onChange=()=>{
 const registration=new Onboarding(state=>{
  const phase=state.phase;
  const ready=phase==='ready';
- const justRegistered=ready&&previousRegistration?.phase==='saving'&&previousRegistration.accept;
- previousRegistration=state;
  byId('payout-nav').hidden=!ready;
  if(!ready){payoutAutoOpen=false;byId('payout-dialog').close();}
  document.body.classList.toggle('player-ready',ready);
@@ -84,8 +117,11 @@ const registration=new Onboarding(state=>{
  if(ready&&gameContext&&!game.service)game.connect(gameContext());
  if(!ready){game.reset();byId('arena').hidden=true;}
  if(!ready&&home.active)home.reset();
- if(ready)showMode(taskMode);
- if(justRegistered)openPayout(true);
+ if(ready){
+  document.body.classList.remove('collecting');
+  if(enterGame){enterGame=false;taskMode='home';}
+  showMode(taskMode);
+ }
  byId('onboarding').hidden=phase==='signed-out';
  byId('agreement').hidden=!state.disclosure;
  byId('consent-form').hidden=phase!=='consent';
@@ -107,6 +143,12 @@ const registration=new Onboarding(state=>{
   byId('rules').replaceChildren();byId('disclosure').textContent='';byId('agreement-versions').textContent='';
  }
 });
+signing.onInactive=()=>{
+ if(!currentUser){beginSignIn();return;}
+ if(signingContext&&(document.body.classList.contains('player-ready')||registration.state.phase==='ready')){if(!signing.active)return signing.connect(signingContext());return;}
+ enterGame=true;
+ showAgreement();
+};
 byId('account-toggle').addEventListener('click',()=>{
  const panel=byId('account-panel');panel.hidden=!panel.hidden;
  if(panel.hidden)byId('agreement-details').open=false;
@@ -143,8 +185,8 @@ try {
    if(auth.currentUser?.uid===user.uid){byId('privacy-request-status').textContent='Request saved privately for review. No email was sent. This is not confirmation that processing is complete.';byId('privacy-request-text').value='';}
   }catch{if(auth.currentUser?.uid===user.uid)byId('privacy-request-status').textContent='Could not confirm your request. Please try again.';}finally{button.disabled=false;}
  });
- // Keep credentials only in memory. Never print, store, or put tokens in URLs.
- await sdk.setPersistence(auth,sdk.inMemoryPersistence);
+ // Stay signed in on this browser until Sign out. Never print tokens or put them in URLs.
+ await sdk.setPersistence(auth,sdk.browserLocalPersistence);
  const provider = new sdk.GoogleAuthProvider();
  provider.setCustomParameters({prompt:'select_account'});
  sdk.onAuthStateChanged(auth,user=>{
@@ -182,6 +224,7 @@ try {
   catch(error){authStatus(errors[error.code] || 'Sign-in could not finish. Please try again in your regular browser.');}
   finally{setLoginDisabled(false);}
  };
+ beginSignIn=startSignIn;
  login.addEventListener('click',startSignIn);
  enterRush.addEventListener('click',startSignIn);
  document.querySelector('#logout').addEventListener('click',async()=>{

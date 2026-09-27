@@ -7,7 +7,7 @@ test('stars use real test points and a distinct next milestone',()=>{
  assert.deepEqual(progress(25),{points:25,target:50,remaining:25,value:0});
  assert.equal(progress(-5).points,0);
 });
-function fixture(queue={signAvailable:1,reviewAvailable:0,pending:1,approved:0,submitted:1,catalogBatch:'daily-use-v1',catalogSize:200}){
+function fixture(queue={signAvailable:1,reviewAvailable:0,pending:1,approved:0,submitted:1,catalogBatch:'daily-use-v1'}){
  const elements=new Map();const root={hidden:true,classList:{add(){},remove(){}},querySelector(id){if(!elements.has(id))elements.set(id,{textContent:'',value:0,hidden:false,disabled:false,close(){this.open=false;},showModal(){this.open=true;},setAttribute(){}});return elements.get(id);}};
  const home=new Home(root);let points;
  home.connect({tasks(next){next(queue);return()=>{};},points(next){points=next;return()=>{};}});
@@ -21,16 +21,20 @@ test('wallet displays live test points and signout clears and closes it',()=>{
 });
 test('a stale zero queue still offers the daily signing catalog',()=>{
  const {home}=fixture({signAvailable:0,signInProgress:true,reviewAvailable:0});
- assert.equal(home.el('home-sign-count').textContent,'…');
+ assert.equal(home.el('home-sign-count').textContent,'30');
  assert.equal(home.el('home-sign-label').textContent,'Continue signing');
  assert.equal(home.el('home-sign').disabled,false);
- assert.match(home.el('queue-note').textContent,/eligible signing challenge/);
+ assert.equal(home.el('home-review').disabled,false);
+ assert.match(home.el('queue-note').textContent,/Pick a challenge/);
 });
-test('a published daily queue is shown exactly, including an empty one',()=>{
- const {home}=fixture({signAvailable:0,reviewAvailable:0,catalogBatch:'daily-use-v1',catalogSize:200,pending:0,approved:0,submitted:0});
+test('a published empty queue still opens both challenges',()=>{
+ const {home}=fixture({signAvailable:0,reviewAvailable:0,catalogBatch:'daily-use-v1',pending:0,approved:0,submitted:0});
  assert.equal(home.el('home-sign-count').textContent,'0');
- assert.equal(home.el('home-sign').disabled,true);
+ assert.equal(home.el('home-review-count').textContent,'0');
+ assert.equal(home.el('home-sign').disabled,false);
+ assert.equal(home.el('home-review').disabled,false);
  assert.equal(home.el('home-sign-label').textContent,'Sign a phrase');
+ assert.equal(home.el('home-review-label').textContent,'Decode a sign');
 });
 test('opening wallet does not request any payment or award points',()=>{
  const {home,points}=fixture();points(0);home.el('cash-out').onclick();home.el('close-wallet').onclick();

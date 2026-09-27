@@ -5,7 +5,8 @@ import subprocess
 import tempfile
 from urllib.request import Request,urlopen
 from google.cloud import storage
-from signing_worker import technical_check,ORIGIN
+from signing_worker import technical_check
+ORIGIN = 'https://signrush-login.web.app'
 with tempfile.TemporaryDirectory(prefix='signrush-upload-smoke-') as folder:
  path=Path(folder)/'synthetic.mp4'
  subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','testsrc2=size=640x360:rate=30','-t','2','-an','-c:v','libx264','-preset','ultrafast','-movflags','+faststart',str(path)],check=True,timeout=30)

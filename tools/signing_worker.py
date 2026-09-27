@@ -24,7 +24,11 @@ TARGET_SIGNERS = 20
 PROJECT = 'signrush-login'
 RAW = 'umi-signrush-raw'
 HELDOUT = 'umi-signrush-heldout-answers'
-ORIGIN = 'https://signrush-login.web.app'
+ALLOWED_ORIGINS = (
+    'https://signrush.io',
+    'https://www.signrush.io',
+    'https://signrush-login.web.app',
+)
 PHRASES = json.loads((Path(__file__).resolve().parents[1] / 'data/pilot-phrases.json').read_text())
 
 
@@ -199,8 +203,9 @@ class Worker:
         key=f"pilot/recordings/{job['assignmentId']}/raw.{ext}"
         blob=self.raw.blob(key)
         # Session is a bearer capability; never print it or copy it into exports.
+        origin=job.get('origin') if job.get('origin') in ALLOWED_ORIGINS else 'https://signrush-login.web.app'
         uri=blob.create_resumable_upload_session(content_type=job['mime'],size=job['size'],
-                    origin=ORIGIN,if_generation_match=0,timeout=30)
+                    origin=origin,if_generation_match=0,timeout=30)
         now=datetime.now(timezone.utc)
         @self.fs.transactional
         def publish(tx):

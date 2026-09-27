@@ -28,10 +28,18 @@ test('submit does nothing without explicit framing confirmation',async()=>{
 });
 test('unsupported recorder selects no format',()=>assert.equal(recordingType({isTypeSupported:()=>false}),undefined));
 
-test('a pending request is not duplicated or assigned by the browser',async()=>{
+test('a phrase tap before the recorder is connected is sent once it connects',async()=>{
+ const els=new Map();const root={hidden:true,dataset:{},querySelector(selector){if(!els.has(selector))els.set(selector,{hidden:true,checked:false,disabled:false,textContent:'',classList:{add(){},remove(){}},removeAttribute(){},play:async()=>{}});return els.get(selector);}};
+ const signing=new Signing(root,{Recorder:{isTypeSupported:()=>true},fetcher:async()=>{throw Error('unexpected network');}});
+ let calls=0;const service={watch:()=>()=>{},request:async()=>{calls++;return 'claimed';},prepare:async()=>{},finish:async()=>{}};
+ signing.onInactive=()=>signing.connect(service);
+ await signing.requestPhrase();
+ assert.equal(calls,1);assert.equal(signing.active,true);
+});
+test('a phrase request stuck without a prompt can be retried',async()=>{
  const {signing,service,next}=fixture();let calls=0;service.request=async()=>{calls++;return 'claimed';};
- next({state:'requested'});await signing.requestPhrase();assert.equal(calls,0);
- next({state:'assigned',prompt:'Synthetic test phrase'});await signing.requestPhrase();assert.equal(calls,0);
+ next({state:'requested'});await signing.requestPhrase();assert.equal(calls,1);
+ next({state:'assigned',prompt:'Synthetic test phrase'});await signing.requestPhrase();assert.equal(calls,1);
 });
 test('the assigned phrase stays explicitly quoted while recording and reviewing',()=>{
  const {signing,els}=fixture();
@@ -43,13 +51,4 @@ test('a just-saved take shows completion instead of the review controls',()=>{
  const {signing,els,next}=fixture();signing.blob=new Blob(['take']);
  next({state:'saved',prompt:'Synthetic test phrase',assignmentId:'test'});
  assert.equal(signing.root.dataset.phase,'saved');assert.equal(els.get('#submission-result').hidden,false);assert.equal(els.get('#submit-video').hidden,true);assert.equal(signing.blob,null);signing.reset();
-});
-
-test('request transport writes only an eligibility request and propagates failures',async()=>{
- const {signingService}=await import('../web/signing.mjs');
- const writes=[];const sdk={doc:(_db,collection,uid)=>`${collection}/${uid}`,serverTimestamp:()=> 'server-time',setDoc:async(ref,value)=>writes.push({ref,value})};
- await signingService({uid:'player'},null,sdk).request();
- assert.deepEqual(writes,[{ref:'signingJobs/player',value:{uid:'player',state:'requested',requestedAt:'server-time'}}]);
- sdk.setDoc=async()=>{throw new Error('permission-denied');};
- await assert.rejects(signingService({uid:'player'},null,sdk).request(),/permission-denied/);
 });

@@ -1,5 +1,6 @@
 import {Payout,payoutService} from './payout.mjs';
-import {presentQueue} from './phrase-queue.mjs';
+import {DAILY_BATCH,DAILY_PHRASES} from './daily-phrases.mjs';
+import {availableCount,coverageCounts,presentQueue} from './phrase-queue.mjs';
 const ACTIVE_SIGNING=new Set(['requested','assigned','upload_requested','granting','uploading','submitted']);
 export function progress(points){
  const safe=Number.isSafeInteger(points)&&points>=0?points:0;
@@ -15,13 +16,13 @@ export class Home {
  reset(){this.payout.reset();this.epoch++;this.stops?.forEach(stop=>stop());this.stops=[];this.active=false;this.previous=null;this.el('cash-wallet').close();this.el('wallet-test-points').textContent='—';this.el('share-status').textContent='';this.el('home-points').textContent='—';this.el('star-progress').value=0;this.el('milestone-label').textContent='Checking your progress…';this.el('earned-stars').textContent='Your stars are waiting';this.root.hidden=true;}
  async copyLink(){
   const epoch=this.epoch;
-  try{await navigator.clipboard.writeText('https://signrush-login.web.app/');if(epoch===this.epoch)this.el('share-status').textContent='Link copied. Share it wherever you like.';}
-  catch{if(epoch===this.epoch)this.el('share-status').textContent='Copy this link: https://signrush-login.web.app/';}
+  try{await navigator.clipboard.writeText('https://signrush.io/');if(epoch===this.epoch)this.el('share-status').textContent='Link copied. Share it wherever you like.';}
+  catch{if(epoch===this.epoch)this.el('share-status').textContent='Copy this link: https://signrush.io/';}
  }
  async share(){
   if(!navigator.share)return this.copyLink();
   const epoch=this.epoch;
-  try{await navigator.share({title:'SignRush',text:'Take a peek at SignRush, an ASL game in the SignRush community.',url:'https://signrush-login.web.app/'});if(epoch===this.epoch)this.el('share-status').textContent='Thanks for spreading the word!';}
+  try{await navigator.share({title:'SignRush',text:'Take a peek at SignRush, an ASL game in the SignRush community.',url:'https://signrush.io/'});if(epoch===this.epoch)this.el('share-status').textContent='Thanks for spreading the word!';}
   catch(error){if(error.name!=='AbortError'&&epoch===this.epoch)this.el('share-status').textContent='Sharing could not open. Try Copy link below.';}
  }
  connect(service){
@@ -29,15 +30,15 @@ export class Home {
   if(service.payout)this.payout.connect(service.payout);
   this.el('home-message').textContent='Two ways to play. One goal: make every meaning count.';
   for(const id of ['home-sign-count','home-review-count','home-pending','home-approved','home-submitted'])this.el(id).textContent='…';
-  this.el('home-sign').disabled=true;this.el('home-review').disabled=true;
+  this.el('home-sign').disabled=false;this.el('home-review').disabled=false;
   this.stops.push(service.tasks(d=>{
    if(epoch!==this.epoch)return;
    const view=presentQueue(d);
-   for(const [id,key] of [['home-sign-count','signAvailable'],['home-review-count','reviewAvailable'],['home-pending','pending'],['home-approved','approved'],['home-submitted','submitted']])this.el(id).textContent=view[key]===null?'…':String(view[key]??0);
-   this.el('home-sign').disabled=!(!view.queueKnown||view.signAvailable||view.signInProgress);this.el('home-review').disabled=!(view.reviewAvailable||view.reviewInProgress);
-   this.el('home-sign-label').textContent=view.signInProgress?'Continue signing':!view.queueKnown?'Find a signing challenge':'Sign a phrase';
+   for(const [id,key] of [['home-sign-count','signAvailable'],['home-review-count','reviewAvailable'],['home-pending','pending'],['home-approved','approved'],['home-submitted','submitted']])this.el(id).textContent=String(view[key]??0);
+   this.el('home-sign').disabled=false;this.el('home-review').disabled=false;
+   this.el('home-sign-label').textContent=view.signInProgress?'Continue signing':'Sign a phrase';
    this.el('home-review-label').textContent=view.reviewInProgress?'Finish your review':'Decode a sign';
-   this.el('queue-note').textContent=!view.queueKnown?'Check for an eligible signing challenge. Availability is confirmed when your request is processed.':view.signAvailable||view.reviewAvailable||view.signInProgress||view.reviewInProgress?'Pick a challenge. Pending reviews can finish while you keep going.':'You’re caught up! Check back for more eligible challenges.';
+   this.el('queue-note').textContent=view.signAvailable||view.reviewAvailable||view.signInProgress||view.reviewInProgress?'Pick a challenge. Pending reviews can finish while you keep going.':'You’re caught up! Check back for more eligible challenges.';
   },()=>{if(epoch===this.epoch)this.el('queue-note').textContent='Task counts are unavailable. Try refreshing.';}));
   this.stops.push(service.points(points=>{
    if(epoch!==this.epoch)return;const p=progress(points);
@@ -53,11 +54,23 @@ export class Home {
 export function homeService(user,db,sdk){return {
  payout:payoutService(user,db,sdk),
  tasks(next,error){
-  let dash=null,jobActive=null;
-  const emit=()=>next(jobActive===null?dash:{...(dash||{}),signInProgress:jobActive});
+  let dash,dashReady=false,exposed=null,coverage=null,reserved=null,jobActive=null;
+  const emit=()=>{
+   if(!dashReady)return;
+   const base=dash||{};
+   if(exposed){
+    next({...base,catalogBatch:DAILY_BATCH,signAvailable:availableCount(DAILY_PHRASES,exposed,coverageCounts(coverage||{}),reserved||0),signInProgress:jobActive===null?Boolean(base.signInProgress):jobActive});
+    return;
+   }
+   next(jobActive===null?dash:{...base,signInProgress:jobActive});
+  };
+  const soft=apply=>s=>{apply(s);emit();};
   const stops=[
-   sdk.onSnapshot(sdk.doc(db,'playerDashboard',user.uid),s=>{dash=s.exists()?s.data():null;emit();},()=>{dash=null;emit();error?.();}),
-   sdk.onSnapshot(sdk.doc(db,'signingJobs',user.uid),s=>{jobActive=ACTIVE_SIGNING.has(s.exists()?s.data().state:null);emit();},error)
+   sdk.onSnapshot(sdk.doc(db,'playerDashboard',user.uid),s=>{dash=s.exists()?s.data():null;dashReady=true;emit();},error),
+   sdk.onSnapshot(sdk.doc(db,'pilotActivity',user.uid),soft(s=>{const data=s.exists()?s.data():{};exposed=new Set([...(data.signingPhraseIds||[]),...(data.reviewedPhraseIds||[])]);}),()=>{exposed=null;emit();}),
+   sdk.onSnapshot(sdk.doc(db,'promptCoverage',DAILY_BATCH),soft(s=>{coverage=s.exists()?s.data():{};}),()=>{coverage=null;emit();}),
+   sdk.onSnapshot(sdk.doc(db,'pilotLimits',DAILY_BATCH),soft(s=>{reserved=s.exists()?Number(s.data().reserved)||0:0;}),()=>{reserved=null;emit();}),
+   sdk.onSnapshot(sdk.doc(db,'signingJobs',user.uid),soft(s=>{jobActive=ACTIVE_SIGNING.has(s.exists()?s.data().state:null);}),()=>{jobActive=null;emit();})
   ];
   return ()=>stops.forEach(stop=>stop());
  },

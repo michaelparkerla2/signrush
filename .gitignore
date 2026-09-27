@@ -21,3 +21,12 @@ application_default_credentials.json
 
 # Local Rust build artifacts
 backend/rust-core/target/
+
+# BitSign Flutter build output
+apps/bitsign/.dart_tool/
+apps/bitsign/.flutter-plugins
+apps/bitsign/.flutter-plugins-dependencies
+apps/bitsign/build/
+apps/bitsign/ios/Pods/
+apps/bitsign/ios/.symlinks/
+apps/bitsign/android/.gradle/

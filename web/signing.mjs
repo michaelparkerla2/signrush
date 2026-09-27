@@ -1,4 +1,6 @@
 // Camera data is held in memory until explicit submit; no microphone requested.
+import {DAILY_BATCH,DAILY_PHRASES,MAX_TASKS,SIGNER_INSTRUCTION,TARGET_SIGNERS} from './daily-phrases.mjs';
+import {choosePhrase,coverageCounts} from './phrase-queue.mjs';
 export const MAX_BYTES=8*1024*1024;
 export const MAX_SECONDS=30;
 export function recordingType(Recorder){
@@ -22,14 +24,16 @@ export class Signing {
   this.reset();
  }
  reset(){
-  this.epoch++;this.unsubscribe?.();this.unsubscribe=null;this.active=false;this.job=null;this.busy=false;this.uploading=false;
-  this.abort?.abort();this.stopCamera();this.clearClip();this.service=null;this.root.hidden=true;
+  this.epoch++;this.unsubscribe?.();this.unsubscribe=null;this.active=false;this.pendingRequest=false;this.job=null;this.busy=false;this.uploading=false;
+  this.abort?.abort();this.stopCamera();this.clearClip();this.service=null;this.root.dataset.phase='idle';this.root.hidden=true;
  }
  connect(service){
+  const queued=this.pendingRequest;
   this.reset();this.service=service;this.active=true;this.root.hidden=false;this.message('Get a phrase, then sign it on camera.');
   const epoch=this.epoch;
   this.unsubscribe=service.watch(job=>{if(epoch!==this.epoch)return;this.job=job;this.draw();if(job?.state==='uploading' && this.blob && !this.uploading)this.upload(job);},()=>{if(epoch===this.epoch){this.job={state:'blocked'};this.stopCamera();this.clearClip();this.draw();this.message('We couldn’t check your task. Sign in again to refresh it.');}});
   this.draw();
+  if(queued)return this.requestPhrase();
  }
  message(text){this.el('signing-status').textContent=text;}
  draw(){
@@ -41,7 +45,7 @@ export class Signing {
   const outcome=j?.outcome;
   this.el('signing-outcome').textContent=({approved:'Approved · Game points earned',quality_check_required:'Video quality needs a check',adjudication_required:'Needs a closer look',collection_full:'Collection target reached',rejected:'Recording not approved',test_only:'Non-qualifying recording',participation_paused:'Participation paused'})[outcome?.status]||'Awaiting review';
   this.el('signing-progress').textContent=outcome?.status==='approved'?'Your points have been added. Keep it up!':outcome?.status==='rejected'?'Independent reports found this video unusable. It has been removed from the task pool and earns no points.':outcome?.status==='quality_check_required'?'The meaning matched, but video quality needs a human check.':outcome?.status==='adjudication_required'?'Reviews need adjudication. No signer points awarded.':`${outcome?.independentReviews||0} of ${outcome?.requiredReviews||3} independent reviews received.`;
-  this.el('get-phrase').hidden=Boolean(j)&&!['saved','failed','blocked'].includes(s);
+  this.el('get-phrase').hidden=Boolean(j?.prompt)&&!['saved','failed','blocked'].includes(s);
   this.el('get-phrase').textContent=j?'Try another phrase ↗':'Get my phrase ↗';this.el('get-phrase').disabled=this.busy;
   this.el('phrase-panel').hidden=!j?.prompt;this.el('phrase-text').textContent=j?.prompt?`“${j.prompt}”`:'';
   this.el('phrase-coverage').textContent=Number.isInteger(j?.approvedSigners)&&Number.isInteger(j?.signerCap)?`${j.approvedSigners} / ${j.signerCap} approved unique signers`:'';
@@ -53,17 +57,18 @@ export class Signing {
   this.el('submit-video').hidden=!assigned || !this.blob;
   this.el('submit-video').disabled=this.busy || !this.el('framing-check').checked;
   this.el('framing-label').hidden=!assigned || !this.blob;
-  const messages={requested:'Finding an eligible phrase for you. Please wait; your request is saved. If this takes longer than expected, you can return later.',upload_requested:'Preparing your private upload…',uploading:'Uploading your recording…',submitted:'Upload received. Checking the saved file…',saved:'',failed:'This recording was kept separately as a failed attempt. No points were awarded.',blocked:'This task could not continue. Your recording has not been approved.'};
+  const messages={requested:'Finding your phrase…',upload_requested:'Preparing your private upload…',uploading:'Uploading your recording…',submitted:'Upload received. Checking the saved file…',saved:'',failed:'This recording was kept separately as a failed attempt. No points were awarded.',blocked:'This task could not continue. Your recording has not been approved.'};
   if(Object.hasOwn(messages,s))this.message(messages[s]);
   this.el('signing-receipt').textContent=['saved','failed'].includes(s)?`Recording ID: ${j.assignmentId}`:'';
   if(['saved','failed','blocked'].includes(s)){this.stopCamera();this.clearClip();}
  }
  async requestPhrase(){
-  if(this.busy||!this.active)return;
+  if(this.busy)return;
+  if(!this.active){this.pendingRequest=true;this.message('Finding your phrase…');return this.onInactive?.();}
   const open=this.job&&!['saved','failed','blocked'].includes(this.job.state);
-  if(open)return;
+  if(open&&(this.job.prompt||this.job.state!=='requested'))return;
   this.busy=true;this.draw();const epoch=this.epoch;
-  try{const result=await this.service.request();if(epoch===this.epoch&&result==='empty')this.message('No signing phrases are open right now. Check back after more are added.');}
+  try{const result=await this.service.request();if(epoch!==this.epoch)return;if(result==='empty')this.message('No signing phrases are open right now. Check back after more are added.');else if(result!=='claimed'&&result!=='active'&&!this.job?.prompt)this.message('The phrase was not assigned. Tap Get my phrase again.');}
   catch{if(epoch===this.epoch)this.message('The phrase request wasn’t confirmed. Wait a moment, then try again.');}
   finally{if(epoch===this.epoch){this.busy=false;this.draw();}}
  }
@@ -105,7 +110,7 @@ export class Signing {
   try{
    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await this.blob.arrayBuffer())),x=>x.toString(16).padStart(2,'0')).join('');
    if(epoch!==this.epoch)return;
-   await this.service.prepare({size:this.blob.size,mime:this.blob.type.split(';')[0],sha256:hash});
+   await this.service.prepare({size:this.blob.size,mime:this.blob.type.split(';')[0],sha256:hash,origin:location.origin});
   }catch{if(epoch===this.epoch)this.message('Upload preparation wasn’t confirmed. Keep this tab open and try again.');}
   finally{if(epoch===this.epoch){this.busy=false;this.draw();}}
  }
@@ -121,11 +126,45 @@ export class Signing {
   finally{clearTimeout(timer);}
  }
 }
+export async function claimSigningTask(user,db,sdk,ref){
+ const fallback=async()=>{try{await sdk.setDoc(ref,{uid:user.uid,state:'requested',requestedAt:sdk.serverTimestamp()});}catch(error){if(error?.code!=='permission-denied')throw error;}return 'fallback';};
+ try{
+  let outcome='skipped';
+  await sdk.runTransaction(db,async tx=>{
+   const activityRef=sdk.doc(db,'pilotActivity',user.uid);
+   const coverageRef=sdk.doc(db,'promptCoverage',DAILY_BATCH);
+   const limitsRef=sdk.doc(db,'pilotLimits',DAILY_BATCH);
+   const jobSnap=await tx.get(ref);
+   const activitySnap=await tx.get(activityRef);
+   const coverageSnap=await tx.get(coverageRef);
+   const limitsSnap=await tx.get(limitsRef);
+   const job=jobSnap.exists()?jobSnap.data():null;
+   if(job&&!['saved','failed','blocked','requested'].includes(job.state)){outcome='active';return;}
+   const activity=activitySnap.exists()?activitySnap.data():{};
+   const coverageDoc=coverageSnap.exists()?coverageSnap.data():null;
+   const reserved=Number(limitsSnap.exists()?limitsSnap.data().reserved:0)||0;
+   const counts=coverageCounts(coverageDoc);
+   if(reserved>=MAX_TASKS){outcome='empty';return;}
+   const phrase=choosePhrase(DAILY_PHRASES,new Set([...(activity.signingPhraseIds||[]),...(activity.reviewedPhraseIds||[])]),counts);
+   const nextCount=phrase?(counts[phrase.id]||0)+1:0;
+   if(!phrase||nextCount>TARGET_SIGNERS){outcome='empty';return;}
+   const assignmentId=[...crypto.getRandomValues(new Uint8Array(16))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+   const signingPhraseIds=[...new Set([...(activity.signingPhraseIds||[]),phrase.id])];
+   tx.set(ref,{uid:user.uid,state:'assigned',requestedAt:sdk.serverTimestamp(),assignmentId,promptId:phrase.id,prompt:phrase.text,promptVersion:phrase.version,signerInstruction:SIGNER_INSTRUCTION,maxBytes:MAX_BYTES,maxSeconds:MAX_SECONDS,batch:DAILY_BATCH});
+   if(activitySnap.exists())tx.update(activityRef,{signingPhraseIds});else tx.set(activityRef,{signingPhraseIds});
+   tx.set(sdk.doc(db,'pilotRecordings',assignmentId),{uid:user.uid,assignmentId,status:'assigned',createdAt:sdk.serverTimestamp(),consentVersion:'training-v1',mode:'test',promptVersion:phrase.version,batch:DAILY_BATCH,corpusSignerId:user.uid,phrase:{id:phrase.id,version:phrase.version,text:phrase.text,signerInstruction:SIGNER_INSTRUCTION,batch:DAILY_BATCH}});
+   if(coverageSnap.exists())tx.update(coverageRef,{[phrase.id]:nextCount,claimId:assignmentId});else tx.set(coverageRef,{[phrase.id]:nextCount,claimId:assignmentId});
+   if(limitsSnap.exists())tx.update(limitsRef,{reserved:reserved+1,limit:MAX_TASKS,claimId:assignmentId});else tx.set(limitsRef,{reserved:1,limit:MAX_TASKS,claimId:assignmentId});
+   outcome='claimed';
+  });
+  return outcome;
+ }catch(error){if(error?.code==='permission-denied')return fallback();throw error;}
+}
 export function signingService(user,db,sdk){
  const ref=sdk.doc(db,'signingJobs',user.uid);
  return {
   watch:(next,error)=>sdk.onSnapshot(ref,snap=>next(snap.exists()?snap.data():null),error),
-  request:()=>sdk.setDoc(ref,{uid:user.uid,state:'requested',requestedAt:sdk.serverTimestamp()}),
+  request:()=>claimSigningTask(user,db,sdk,ref),
   prepare:fields=>sdk.updateDoc(ref,{...fields,state:'upload_requested'}),
   finish:()=>sdk.updateDoc(ref,{state:'submitted'})
  };
