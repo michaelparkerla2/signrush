@@ -118,7 +118,8 @@ const registration=new Onboarding(state=>{
   if(enterGame){enterGame=false;taskMode='home';}
   showMode(taskMode);
  }
- byId('onboarding').hidden=phase==='signed-out';
+ byId('onboarding').hidden=phase==='signed-out'||phase==='loading';
+ byId('account').hidden=phase==='signed-out'||phase==='loading';
  byId('agreement').hidden=!state.disclosure;
  byId('consent-form').hidden=phase!=='consent';
  byId('retry-registration').hidden=phase!=='unavailable';
@@ -126,7 +127,7 @@ const registration=new Onboarding(state=>{
  byId('agree').checked=false;byId('save-consent').disabled=true;
  if(phase==='signed-out'){for(const id of ['asl-experience','hearing-identity','asl-role'])byId(id).value='unspecified';byId('privacy-request-text').value='';byId('privacy-request-status').textContent='';}
  byId('registration-status').textContent=state.message || ({
-  loading:'Checking your player profile…',
+  loading:'',
   consent:state.withdrawn?'You have stopped contributing. Your recorded agreement remains on file.':'Welcome to SignRush! A little about you, then you’re ready to join.',
   saving:state.accept?'Saving your agreement…':'Stopping contributions…',
   ready:''

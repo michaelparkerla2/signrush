@@ -34,3 +34,30 @@ button.landing-cta{width:auto;min-height:48px;text-align:left}.entry-status{font
 #registration-status{color:#c5cee8}#agreement-details>summary{display:list-item;cursor:pointer;padding:12px 0;color:#d4c5ff;font-weight:700}#save-consent{background:#bef65a;color:#18252a;min-height:52px}#save-consent:disabled{opacity:.45}#onboarding a:focus-visible{outline:3px solid #bef65a;outline-offset:3px}
 
 .report-video{background:#3d2430;color:#ffd0d0;border:1px solid #9a596a;min-height:48px;margin:12px 0;font-weight:750}.report-panel{padding:18px;background:#292237;border:1px solid #79566d;border-radius:16px;margin:12px 0}.report-panel p{font-size:14px;line-height:1.6}.report-panel select{width:100%;min-height:48px;background:#202a40;color:#fff;font:inherit;font-size:16px;border:1px solid #78839b;border-radius:10px;padding:10px}.report-panel button{margin-top:12px}.moderation-warning{max-width:712px;margin:12px auto;padding:14px 18px;border:1px solid #e37c89;border-radius:14px;background:#3b202e;color:#ffe0e5;font-size:13px;line-height:1.6}@media(max-width:760px){.moderation-warning{margin:12px 24px}}
+
+/* Readable at phone size and in shared screenshots; no extra startup screen. */
+body{font-size:18px;line-height:1.6}
+.intro .lead{font-size:clamp(21px,2.2vw,26px);line-height:1.5}
+.eyebrow,.section-heading .eyebrow,.reward-plan-label,.season-chip,.bonus-tag{font-size:14px;line-height:1.5;letter-spacing:1.2px}
+.rate-breakdown{font-size:18px;line-height:1.5;font-weight:650}
+.rate-conditions,.hero-rewards p,.pool-conditions,.bonus-pool details,.arena-note{font-size:15px;line-height:1.65}
+.two-ways,.landing-progression,.landing-future,.reward-now,.note,.note p,#status,#entry-status{font-size:17px;line-height:1.6}
+.landing-characters span{font-size:12px;letter-spacing:1.2px}
+.hero-rewards strong,.pool-description,.challenge>span{font-size:18px;line-height:1.5}
+#account-panel>p,.welcome-questions p,#disclosure,#rules,.agreement-check,.report-panel p{font-size:16px;line-height:1.65}
+#registration-status,#signing-status,#review-status,.signer-instruction,.queue-note,.board-status,.trophy-next{font-size:16px;line-height:1.6}
+.trophy-navigation,.trophy-item strong,.trophy-item span,.arena-entry small,.tiny-note{font-size:14px;line-height:1.5}
+.trophy-shelf{grid-auto-columns:144px}.trophy-item{min-height:180px}
+.signing-heading h2{font-size:clamp(24px,3vw,30px)}
+.signing-heading .pill,.pill{font-size:12px}
+#phrase-panel .eyebrow{font-size:14px}
+.record-tips,.record-tips p,.record-controls .agreement-check{font-size:15px;line-height:1.6}
+#status:empty,#entry-status:empty,#registration-status:empty{display:none}
+footer{font-size:12px;line-height:1.6}
+@media(max-width:450px){
+ .rate-breakdown{font-size:17px}.rate-conditions,.hero-rewards p,.pool-conditions{font-size:14px}
+ .hero-rewards{gap:10px}.hero-reward-copy{overflow-wrap:anywhere}
+ .trophy-navigation{flex-wrap:wrap}.trophy-shelf{grid-auto-columns:132px}
+ .trophy-item strong,.trophy-item span{font-size:14px}
+ .landing-progression{font-size:15px;letter-spacing:.5px}
+}
