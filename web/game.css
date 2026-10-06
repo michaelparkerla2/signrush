@@ -47,3 +47,15 @@ button.landing-cta{width:auto;min-height:48px;text-align:left}.entry-status{font
 .earning-details .rate-breakdown,.earning-details .rate-conditions{font-size:13px;line-height:1.6}
 .earning-details .rate-breakdown{margin:0 0 8px}
 .intro .landing-modes{margin-top:24px}
+
+/* Portrait slots are placeholders until verified winner photos are supplied. */
+.hero-winners{padding:20px 16px;border:1px solid #494263;border-radius:24px;background:linear-gradient(135deg,#29213f,#141e32);overflow:hidden}
+.winner-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+.winner-heading h2{font-size:21px;letter-spacing:-.6px;margin:0}.winner-heading>span{font-size:9px;letter-spacing:1px;color:#b7b0cd}
+.winner-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.winner-slot{text-align:center;min-width:0;--award:#bff45f}.winner-slot--points{--award:#b5a0ff}.winner-slot--bonus{--award:#ffcf69}
+.winner-portrait{position:relative;width:100%;max-width:124px;aspect-ratio:1;margin:0 auto 16px;background:radial-gradient(circle at 50% 25%,#ffffff14,transparent 70%),#222b42;border:2px solid var(--award);border-radius:28px;box-shadow:0 8px 24px #0003;isolation:isolate}
+.winner-portrait svg{width:100%;height:100%;fill:var(--award);opacity:.3;border-radius:26px;overflow:hidden}.winner-medal{position:absolute;bottom:-11px;right:-5px;display:grid;place-items:center;width:33px;height:33px;background:var(--award);color:#192336;border:3px solid #1a2034;border-radius:50%;font-size:18px;font-weight:800}.winner-spark{position:absolute;top:-10px;left:-6px;color:var(--award);font-size:24px;animation:winner-glimmer 3.6s ease-in-out infinite}.winner-slot--points .winner-spark{animation-delay:1.2s}.winner-slot--bonus .winner-spark{animation-delay:2.4s}
+.winner-slot h3{font-size:13px;line-height:1.3;margin:0;color:var(--award)}.winner-slot p{font-size:11px;color:#aab7cd;margin:5px 0 0}.player-ready .entry-column>.hero-winners{display:none}
+@keyframes winner-glimmer{0%,100%{transform:scale(.85) rotate(-10deg);opacity:.55}50%{transform:scale(1.12) rotate(15deg);opacity:1}}
+@media(max-width:450px){.hero-winners{padding:18px 12px}.winner-heading h2{font-size:19px}.winner-heading>span{font-size:8px}.winner-grid{gap:10px}.winner-portrait{border-radius:23px}.winner-slot h3{font-size:12px}.winner-slot p{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.winner-spark{animation:none}}
