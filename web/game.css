@@ -61,3 +61,5 @@ button.landing-cta{width:auto;min-height:48px;text-align:left}.entry-status{font
 @media(prefers-reduced-motion:reduce){.winner-spark{animation:none}}
 
 .winner-portrait>img{display:block;width:100%;height:100%;object-fit:cover;object-position:42% center;border-radius:inherit}
+
+.winner-slot--bonus .winner-portrait>img{object-position:center 22%}
