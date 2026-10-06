@@ -37,7 +37,6 @@ button.landing-cta{width:auto;min-height:48px;text-align:left}.entry-status{font
 
 /* Keep the entry screen focused; reveal the full payout explanation on demand. */
 .earning-highlight .eyebrow{font-size:13px;letter-spacing:1px;margin-bottom:10px}
-.rate-status{font-size:13px;line-height:1.5;color:#c8d2df;margin:12px 0 0}
 .earning-details{margin-top:4px}
 .earning-details>summary{display:flex;align-items:center;gap:8px;width:fit-content;min-height:44px;cursor:pointer;list-style:none;font-size:13px;color:#c8d2df;border-radius:6px}
 .earning-details>summary::-webkit-details-marker{display:none}
