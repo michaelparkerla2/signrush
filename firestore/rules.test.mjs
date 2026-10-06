@@ -319,3 +319,15 @@ test('third strike cannot be cleared by the client and blocks both task types',a
  for(const collection of ['signingJobs','reviewJobs'])await assertFails(setDoc(doc(d,collection+'/alice'),{uid:'alice',state:'requested',requestedAt:serverTimestamp()}));
  await assertFails(getDoc(doc(db('bob'),'playerModeration/alice')));
 });
+test('photo avatars stay owner-only and leaderboard requires matching opt-in',async()=>{
+ const d=db();await create(d);await consent(d,'photo');
+ const photo='data:image/jpeg;base64,/9j/AAAA/9k=';
+ const p={alias:'Photo Player',avatar:photo,listed:false,updatedAt:serverTimestamp()};
+ await assertSucceeds(setDoc(doc(d,'gameProfiles/alice'),p));
+ await assertFails(getDoc(doc(db('bob'),'gameProfiles/alice')));
+ for(const avatar of ['https://example.com/photo.jpg','data:image/svg+xml;base64,AAAA','data:image/jpeg;base64,/9j/'+'A'.repeat(24000)])await assertFails(setDoc(doc(d,'gameProfiles/alice'),{...p,avatar}));
+ const e={alias:p.alias,avatar:photo,points:0,updatedAt:serverTimestamp()};
+ await assertFails(setDoc(doc(d,'leaderboard/alice'),e));
+ const b=writeBatch(d);b.set(doc(d,'gameProfiles/alice'),{...p,listed:true});b.set(doc(d,'leaderboard/alice'),e);await assertSucceeds(b.commit());
+ await assertFails(setDoc(doc(d,'leaderboard/alice'),{...e,avatar:'sprout'}));
+});

@@ -63,3 +63,5 @@ button.landing-cta{width:auto;min-height:48px;text-align:left}.entry-status{font
 .winner-portrait>img{display:block;width:100%;height:100%;object-fit:cover;object-position:42% center;border-radius:inherit}
 
 .winner-slot--bonus .winner-portrait>img{object-position:center 22%}
+
+.player-photo-preview{display:block;object-fit:cover;border-radius:22px;border:2px solid var(--lime);margin:12px 0}#player-photo{max-width:100%;font-size:14px}#player-avatar,.podium-player img,.rank-row img{object-fit:cover}

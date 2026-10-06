@@ -22,3 +22,11 @@ test('signout suppresses late profile loads and clears the player editor',async(
   assert.equal(g.profile,null);assert.equal(g.loaded,false);assert.equal(g.el('player-alias').value,'');assert.equal(g.el('edit-player').disabled,true);
  }finally{globalThis.document=previous;}
 });
+test('photo avatars reject external URLs, active formats and oversized data',async()=>{
+ const {isAvatarPhoto,prepareAvatarPhoto}=await import('../web/avatar-photo.mjs');
+ const photo='data:image/jpeg;base64,/9j/AAAA/9k=';
+ assert.equal(validProfile('Player',photo,false).avatar,photo);
+ for(const bad of ['https://example.com/track.jpg','data:image/svg+xml;base64,AAAA','data:image/jpeg;base64,/9j/'+ 'A'.repeat(24000)])assert.equal(isAvatarPhoto(bad),false);
+ await assert.rejects(prepareAvatarPhoto({type:'image/svg+xml',size:10}));
+ await assert.rejects(prepareAvatarPhoto({type:'image/jpeg',size:9*1024*1024}));
+});
