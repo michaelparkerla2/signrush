@@ -18,13 +18,13 @@ export class Signing {
   this.el('record').onclick=()=>this.record();
   this.el('stop').onclick=()=>this.stop();
   this.el('retake').onclick=()=>{this.clearClip();this.openCamera();};
-  this.el('submit-video').onclick=()=>this.submit();
+  this.el('submit-video').onclick=()=>this.job?.state==='uploading'?this.upload(this.job):this.submit();
   this.el('framing-check').onchange=()=>this.draw();
   globalThis.addEventListener?.('pagehide',()=>this.reset());
   this.reset();
  }
  reset(){
-  this.epoch++;this.unsubscribe?.();this.unsubscribe=null;this.active=false;this.pendingRequest=false;this.job=null;this.busy=false;this.uploading=false;
+  clearTimeout(this.waitTimer);this.waitState=null;this.uploadError=false;this.epoch++;this.unsubscribe?.();this.unsubscribe=null;this.active=false;this.pendingRequest=false;this.job=null;this.busy=false;this.uploading=false;
   this.abort?.abort();this.stopCamera();this.clearClip();this.service=null;this.root.dataset.phase='idle';this.root.hidden=true;
  }
  connect(service){
@@ -38,6 +38,14 @@ export class Signing {
  message(text){this.el('signing-status').textContent=text;}
  draw(){
   const j=this.job,s=j?.state;
+  if(this.waitState!==s){
+   clearTimeout(this.waitTimer);this.waitState=s;
+   if(['upload_requested','granting','submitted'].includes(s)){
+    const epoch=this.epoch;
+    this.waitTimer=setTimeout(()=>{if(epoch===this.epoch&&this.job?.state===s&&(s==='submitted'||this.blob))this.message(s==='submitted'?'Your upload is waiting for the server to check it. Approval is not complete.':'The upload service is delayed. Your video has not uploaded yet. Keep this tab open to preserve your recording.');},30000);
+    this.waitTimer?.unref?.();
+   }
+  }
   this.root.dataset.phase=['saved','failed','blocked'].includes(s)?s:this.recording?'recording':this.blob?'review':s||'idle';
   this.el('capture-surface').hidden=!j?.prompt;
   this.el('submission-result').hidden=s!=='saved';
@@ -54,11 +62,15 @@ export class Signing {
   this.el('record').hidden=!assigned || !this.stream || this.recording || Boolean(this.blob);
   this.el('stop').hidden=!this.recording;
   this.el('retake').hidden=!assigned || !this.blob || this.busy;
-  this.el('submit-video').hidden=!assigned || !this.blob;
-  this.el('submit-video').disabled=this.busy || !this.el('framing-check').checked;
+  const retryUpload=s==='uploading'&&this.uploadError&&Boolean(this.blob);
+  this.el('submit-video').hidden=(!assigned || !this.blob)&&!retryUpload;
+  this.el('submit-video').textContent=retryUpload?'Retry upload':'Submit video';
+  this.el('submit-video').disabled=this.busy || this.uploading || !this.el('framing-check').checked;
   this.el('framing-label').hidden=!assigned || !this.blob;
   const messages={requested:'Finding your phrase…',upload_requested:'Preparing your private upload…',uploading:'Uploading your recording…',submitted:'Upload received. Checking the saved file…',saved:'',failed:'This recording was kept separately as a failed attempt. No points were awarded.',blocked:'This task could not continue. Your recording has not been approved.'};
   if(Object.hasOwn(messages,s))this.message(messages[s]);
+  if(s==='uploading'&&this.uploadError)this.message('Upload wasn’t confirmed. Keep this tab open and tap Retry upload.');
+  if(['upload_requested','granting','uploading'].includes(s)&&!this.blob)this.message('This unfinished upload has no recording in this browser. The original recording was not saved here; contact support for task recovery.');
   this.el('signing-receipt').textContent=['saved','failed'].includes(s)?`Recording ID: ${j.assignmentId}`:'';
   if(['saved','failed','blocked'].includes(s)){this.stopCamera();this.clearClip();}
  }
@@ -115,15 +127,16 @@ export class Signing {
   finally{if(epoch===this.epoch){this.busy=false;this.draw();}}
  }
  async upload(job){
+  if(this.uploading||!this.blob)return;
   if(!validUploadURL(job.uploadURL)){this.message('The upload destination could not be verified.');return;}
-  this.uploading=true;const epoch=this.epoch;this.abort=new AbortController();const timer=setTimeout(()=>this.abort?.abort(),120000);
+  this.uploading=true;this.uploadError=false;this.draw();const epoch=this.epoch;this.abort=new AbortController();const timer=setTimeout(()=>this.abort?.abort(),120000);
   try{
    const response=await this.fetcher(job.uploadURL,{method:'PUT',headers:{'Content-Type':job.mime},body:this.blob,credentials:'omit',redirect:'error',signal:this.abort.signal});
    if(epoch!==this.epoch)return;
    if(!response.ok)throw new Error('upload');
    await this.service.finish();
-  }catch{if(epoch===this.epoch)this.message('Upload wasn’t confirmed. The cloud check will reconcile any completed file. Keep this tab open.');}
-  finally{clearTimeout(timer);}
+  }catch{if(epoch===this.epoch)this.uploadError=true;}
+  finally{clearTimeout(timer);if(epoch===this.epoch){this.uploading=false;this.draw();}}
  }
 }
 export async function claimSigningTask(user,db,sdk,ref){

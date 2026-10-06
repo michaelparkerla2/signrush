@@ -52,3 +52,26 @@ test('a just-saved take shows completion instead of the review controls',()=>{
  next({state:'saved',prompt:'Synthetic test phrase',assignmentId:'test'});
  assert.equal(signing.root.dataset.phase,'saved');assert.equal(els.get('#submission-result').hidden,false);assert.equal(els.get('#submit-video').hidden,true);assert.equal(signing.blob,null);signing.reset();
 });
+
+test('failed upload preserves video and permits an explicit retry',async()=>{
+ const {signing,els,service}=fixture();
+ const job={state:'uploading',uploadURL:'https://storage.googleapis.com/upload/storage/v1/b/umi-signrush-raw/o?upload_id=test',mime:'video/webm'};
+ signing.job=job;signing.blob=new Blob(['synthetic']);els.get('#framing-check').checked=true;
+ let attempts=0,finished=0;signing.fetcher=async()=>{if(++attempts===1)throw Error('offline');return {ok:true};};service.finish=async()=>finished++;
+ await signing.upload(job);
+ assert.equal(signing.uploading,false);assert.equal(signing.uploadError,true);assert.ok(signing.blob);
+ assert.equal(els.get('#submit-video').hidden,false);assert.equal(els.get('#submit-video').textContent,'Retry upload');
+ await els.get('#submit-video').onclick();
+ assert.equal(attempts,2);assert.equal(finished,1);assert.equal(signing.uploadError,false);signing.reset();
+});
+test('reloading an unfinished upload explains that the local video is missing',()=>{
+ const {signing,els,next}=fixture();next({state:'upload_requested',prompt:'Synthetic'});
+ assert.match(els.get('#signing-status').textContent,/no recording in this browser/);signing.reset();
+});
+test('late failed upload after signout cannot change the next session',async()=>{
+ const {signing}=fixture();let reject;
+ signing.blob=new Blob(['synthetic']);signing.fetcher=()=>new Promise((_,r)=>reject=r);
+ const pending=signing.upload({state:'uploading',uploadURL:'https://storage.googleapis.com/upload/storage/v1/b/umi-signrush-raw/o?upload_id=test',mime:'video/webm'});
+ signing.reset();reject(Error('offline'));await pending;
+ assert.equal(signing.uploadError,false);assert.equal(signing.uploading,false);
+});
