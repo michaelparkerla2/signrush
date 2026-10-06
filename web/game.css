@@ -59,3 +59,5 @@ button.landing-cta{width:auto;min-height:48px;text-align:left}.entry-status{font
 @keyframes winner-glimmer{0%,100%{transform:scale(.85) rotate(-10deg);opacity:.55}50%{transform:scale(1.12) rotate(15deg);opacity:1}}
 @media(max-width:450px){.hero-winners{padding:18px 12px}.winner-heading h2{font-size:19px}.winner-heading>span{font-size:8px}.winner-grid{gap:10px}.winner-portrait{border-radius:23px}.winner-slot h3{font-size:12px}.winner-slot p{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.winner-spark{animation:none}}
+
+.winner-portrait>img{display:block;width:100%;height:100%;object-fit:cover;object-position:42% center;border-radius:inherit}
