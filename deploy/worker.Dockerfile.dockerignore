@@ -1,0 +1,9 @@
+**
+!tools/
+!tools/*.py
+!tools/signing-requirements.txt
+!data/
+!data/pilot-phrases.json
+!web/
+!web/legal/
+!web/legal/manifest.json
