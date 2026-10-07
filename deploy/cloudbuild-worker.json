@@ -1,0 +1,7 @@
+{
+  "steps": [{"name": "gcr.io/cloud-builders/docker", "args": ["build", "-f", "deploy/worker.Dockerfile", "-t", "us-east1-docker.pkg.dev/signrush/signrush-worker/worker:${_REVISION}", "."]}],
+  "images": ["us-east1-docker.pkg.dev/signrush/signrush-worker/worker:${_REVISION}"],
+  "serviceAccount": "projects/signrush/serviceAccounts/signrush-builder@signrush.iam.gserviceaccount.com",
+  "options": {"logging": "CLOUD_LOGGING_ONLY"},
+  "timeout": "900s"
+}

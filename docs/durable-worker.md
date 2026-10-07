@@ -1,12 +1,12 @@
 # Private scheduled upload worker
 
-Status: prepared, not deployed. Production uploads remain blocked until deployment and end-to-end verification.
+Status: cloud deployment and production-path verification completed on 2026-10-07; see `worker-rollout-20261007.md` for evidence and limits.
 
-The existing `signrush` storage project has billing enabled; `signrush-login` does not. Do not upgrade Firebase or attach billing to it. New metered runtime use requires approval under the repository's free/trial-only instructions. No zero-cost guarantee is possible from a free allowance; other account usage can consume that allowance.
+The existing `signrush` storage project has billing enabled; `signrush-login` does not. Do not upgrade Firebase or attach billing to it. The user explicitly approved metered cloud worker deployment on 2026-10-07; this is an exception for this deployment to the repository's free/trial-only default. No zero-cost guarantee is possible from a free allowance; other account usage can consume that allowance.
 
 ## Design
 
-Run the existing Python ConsensusWorker (including signing and reviews) in a private Cloud Run service. Cloud Scheduler calls POST /tick every minute using a dedicated service account and OIDC token. Each request performs one worker cycle; there is no background thread that depends on idle CPU. Leave minimum instances at zero. Keep request-based billing, concurrency 1, maximum instances 1, CPU 1, memory 512MiB, request timeout 480 seconds, and startup CPU boost disabled. The FFmpeg tools run inside the cloud container, never on the operator's computer.
+Run the existing Python ConsensusWorker (including signing and reviews) in a private Cloud Run service. Cloud Scheduler calls POST /tick every minute using a dedicated service account and OIDC token. Each request checks for queued work; full cycles run for pending work or at least every 15 minutes for maintenance; there is no background thread that depends on idle CPU. Leave minimum instances at zero. Keep request-based billing, concurrency 1, maximum instances 1, CPU 1, memory 512MiB, request timeout 480 seconds, and startup CPU boost disabled. The FFmpeg tools run inside the cloud container, never on the operator's computer.
 
 The service also checks the verified caller email and token audience. Cloud Run IAM must require authentication; never grant allUsers or allAuthenticatedUsers. The Firestore `workerHealth/scheduled` lease prevents concurrent cycles across revisions; a process watchdog kills a stuck container before its 10-minute lease expires. Existing transactional upload grants recover after interruption. A finished cycle is not proof every job succeeded: existing worker per-job retry logs and actual job progression must also be checked.
 
