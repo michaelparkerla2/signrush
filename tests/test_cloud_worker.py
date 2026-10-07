@@ -18,3 +18,16 @@ class CloudWorkerTests(unittest.TestCase):
         self.assertEqual(runner.tick(),409)
         worker.tick.assert_not_called();worker.db.document.assert_not_called()
         runner.lock.release()
+
+class IdleWorkTests(unittest.TestCase):
+    def test_idle_queue_skips_full_cycle_but_maintenance_and_requests_run(self):
+        from datetime import datetime, timedelta, timezone
+        from tools.cloud_worker import work_due
+        worker=Mock();now=datetime.now(timezone.utc)
+        stream=worker.db.collection.return_value.where.return_value.limit.return_value.stream
+        stream.return_value=[]
+        self.assertFalse(work_due(worker,now,now))
+        self.assertTrue(work_due(worker,now-timedelta(minutes=15),now))
+        self.assertTrue(work_due(worker,None,now))
+        stream.return_value=[object()]
+        self.assertTrue(work_due(worker,now,now))

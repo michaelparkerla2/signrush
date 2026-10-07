@@ -16,6 +16,20 @@ def authorized(header, audience, caller, verify):
         return False
 
 
+def work_due(worker, last_work, now):
+    """Avoid rescanning the full corpus and rewriting dashboards every idle minute."""
+    if last_work is None or (now - last_work).total_seconds() >= 900:
+        return True
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    queues = (
+        ('signingJobs', ['requested', 'upload_requested', 'granting', 'uploading', 'submitted']),
+        ('reviewJobs', ['requested', 'preparing', 'refresh_requested', 'submitted']),
+    )
+    return any(next(iter(worker.db.collection(collection).where(
+        filter=FieldFilter('state', 'in', states)).limit(1).stream()), None) is not None
+        for collection, states in queues)
+
+
 class Runner:
     def __init__(self, worker):
         self.worker = worker
@@ -26,6 +40,7 @@ class Runner:
             return 409
         ref = self.worker.db.document('workerHealth/scheduled')
         token = secrets.token_hex(16)
+        last_work = None
         fs = self.worker.fs
         # Terminate the container before its lease can expire, even if an SDK call
         # hangs. Cloud Run restarts it; the next scheduled request can recover.
@@ -35,8 +50,10 @@ class Runner:
         try:
             @fs.transactional
             def acquire(tx):
+                nonlocal last_work
                 previous = ref.get(transaction=tx).to_dict() or {}
                 now = datetime.now(timezone.utc)
+                last_work = previous.get('lastWorkAt')
                 if previous.get('leaseUntil', now) > now:
                     return False
                 tx.set(ref, {'leaseToken': token, 'leaseUntil': now + timedelta(minutes=10),
@@ -44,8 +61,11 @@ class Runner:
                 return True
             if not acquire(self.worker.db.transaction()):
                 return 409
+            processed = False
             try:
-                self.worker.tick()
+                if work_due(self.worker, last_work, datetime.now(timezone.utc)):
+                    self.worker.tick()
+                    processed = True
                 status = 200
             except Exception as exc:
                 # SDK errors may contain private URLs; do not log their messages.
@@ -57,7 +77,9 @@ class Runner:
                 if previous.get('leaseToken') == token:
                     tx.update(ref, {'leaseToken': fs.DELETE_FIELD, 'leaseUntil': fs.DELETE_FIELD,
                                     'finishedAt': fs.SERVER_TIMESTAMP,
-                                    'state': 'cycle_finished' if status == 200 else 'failed'})
+                                    'state': 'cycle_finished' if status == 200 else 'failed',
+                                    'processed': processed,
+                                    **({'lastWorkAt': fs.SERVER_TIMESTAMP} if processed else {})})
             finish(self.worker.db.transaction())
             return status
         finally:
